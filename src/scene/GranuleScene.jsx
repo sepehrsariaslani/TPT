@@ -63,6 +63,7 @@ function MaterialFeedLights({ progressRef }) {
     const feed = 1 - range(p, 0.19, 0.36);
     const convergence = range(p, 0.065, 0.19) * (1 - range(p, 0.27, 0.42));
     const plasticizing = range(p, 0.22, 0.34) * (1 - range(p, 0.47, 0.59));
+    const injection = range(p, 0.39, 0.455) * (1 - range(p, 0.6, 0.69));
 
     if (leftRef.current) {
       leftRef.current.intensity = THREE.MathUtils.damp(
@@ -83,7 +84,7 @@ function MaterialFeedLights({ progressRef }) {
     if (centreRef.current) {
       centreRef.current.intensity = THREE.MathUtils.damp(
         centreRef.current.intensity,
-        0.45 + convergence * 1.35 + plasticizing * 0.85,
+        0.45 + convergence * 1.35 + plasticizing * 0.85 + injection * 1.05,
         4.8,
         delta,
       );
@@ -131,6 +132,7 @@ function CameraRig({ progressRef }) {
     const feed = 1 - range(p, 0.16, 0.28);
     const convergence = range(p, 0.06, 0.22) * (1 - range(p, 0.3, 0.42));
     const plasticizing = range(p, 0.22, 0.34) * (1 - range(p, 0.48, 0.59));
+    const injection = range(p, 0.39, 0.47) * (1 - range(p, 0.61, 0.7));
     const braid = range(p, 0.16, 0.32) * (1 - range(p, 0.49, 0.61));
     const preform = range(p, 0.37, 0.53) * (1 - range(p, 0.65, 0.76));
     const product = range(p, 0.49, 0.7);
@@ -139,13 +141,13 @@ function CameraRig({ progressRef }) {
     const pointerAmount = mobile ? 0 : tablet ? 0.055 : 0.095;
     const targetX = pointer.x * pointerAmount;
     const targetY = mobile
-      ? 2.52 + feed * 0.23 - convergence * 0.12 - plasticizing * 0.08 - product * 0.16 - finalHero * 0.05 + braid * 0.02
-      : 3.04 + feed * 0.34 - convergence * 0.2 - plasticizing * 0.15 + pointer.y * 0.055 - product * 0.22 - finalHero * 0.08 + braid * 0.035;
+      ? 2.52 + feed * 0.23 - convergence * 0.12 - plasticizing * 0.08 - injection * 0.06 - product * 0.16 - finalHero * 0.05 + braid * 0.02
+      : 3.04 + feed * 0.34 - convergence * 0.2 - plasticizing * 0.15 - injection * 0.11 + pointer.y * 0.055 - product * 0.22 - finalHero * 0.08 + braid * 0.035;
     const targetZ = mobile
-      ? 16.2 + feed * 0.62 - convergence * 0.35 - plasticizing * 0.34 - product * 0.58 - finalHero * 0.08 + preform * 0.05
+      ? 16.2 + feed * 0.62 - convergence * 0.35 - plasticizing * 0.34 - injection * 0.22 - product * 0.58 - finalHero * 0.08 + preform * 0.05
       : tablet
-        ? 13.25 + feed * 0.48 - convergence * 0.3 - plasticizing * 0.42 - product * 0.66 - finalHero * 0.1 + preform * 0.06
-        : 11.2 + feed * 0.42 - convergence * 0.28 - plasticizing * 0.48 - product * 0.57 - finalHero * 0.12 + preform * 0.07;
+        ? 13.25 + feed * 0.48 - convergence * 0.3 - plasticizing * 0.42 - injection * 0.28 - product * 0.66 - finalHero * 0.1 + preform * 0.06
+        : 11.2 + feed * 0.42 - convergence * 0.28 - plasticizing * 0.48 - injection * 0.34 - product * 0.57 - finalHero * 0.12 + preform * 0.07;
 
     camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 3.2, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3.2, delta);
@@ -154,7 +156,8 @@ function CameraRig({ progressRef }) {
     const baseFov = mobile ? 44 : tablet ? 41 : 38;
     const targetFov = baseFov
       + feed * (mobile ? 2.1 : tablet ? 1.6 : 1.35)
-      - plasticizing * (mobile ? 0.45 : 0.75);
+      - plasticizing * (mobile ? 0.45 : 0.75)
+      - injection * (mobile ? 0.18 : 0.34);
     const nextFov = THREE.MathUtils.damp(camera.fov, targetFov, 3.5, delta);
     if (Math.abs(nextFov - camera.fov) > 0.001) {
       camera.fov = nextFov;
@@ -162,8 +165,8 @@ function CameraRig({ progressRef }) {
     }
 
     const lookY = mobile
-      ? 0.07 + feed * 0.44 - convergence * 0.18 - plasticizing * 0.1 - product * 0.07
-      : 0.2 + feed * 0.62 - convergence * 0.28 - plasticizing * 0.18 - product * 0.13;
+      ? 0.07 + feed * 0.44 - convergence * 0.18 - plasticizing * 0.1 - injection * 0.05 - product * 0.07
+      : 0.2 + feed * 0.62 - convergence * 0.28 - plasticizing * 0.18 - injection * 0.09 - product * 0.13;
     target.set(0, lookY, 0);
     camera.lookAt(target);
   });
