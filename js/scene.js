@@ -1,6 +1,6 @@
 /* =========================================================
-   TPT — Scroll Scene
-   گرانول → قیف → ذوب → تزریق → قالب → قطعه نهایی
+   TPT — Scroll Scene  (blue / vortex edition)
+   بارش گرانول → چرخش → گردابه → شکل‌گیری → محصول نهایی → پاشیدن دوباره
    ========================================================= */
 (function () {
   const canvas = document.getElementById('scene-canvas');
@@ -9,385 +9,272 @@
   const scene = document.querySelector('.scene');
   const steps = [...document.querySelectorAll('.hud__step')];
   const bar = document.getElementById('sceneBar');
-  const tempEl = document.getElementById('sceneTemp');
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  /* product photo */
+  const lid = new Image();
+  let lidReady = false;
+  lid.onload = () => (lidReady = true);
+  lid.src = 'assets/product-lid.jpg';
+
   let W = 0, H = 0, DPR = 1;
-  let cx = 0, cy = 0, S = 0;
-  let particles = [], shapePts = [];
-  let p = 0, pSmooth = 0;
+  let cx = 0, cy = 0, R = 0, coneTop = 0, coneH = 0, diskY = 0, Rd = 0, ry = 0, T = 0;
+  let rain = [], swarm = [];
+  let p = 0, pS = 0, t = 0;
 
-  /* ---------- helpers ---------- */
+  /* helpers */
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
-  const lerp = (a, b, t) => a + (b - a) * t;
-  const seg = (v, a, b) => clamp((v - a) / (b - a));         // 0..1 inside [a,b]
-  const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-  const easeOut = t => 1 - Math.pow(1 - t, 3);
-  const smooth = t => t * t * (3 - 2 * t);
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const seg = (v, a, b) => clamp((v - a) / (b - a));
+  const smooth = k => k * k * (3 - 2 * k);
+  const easeOut = k => 1 - Math.pow(1 - k, 3);
+  const easeIO = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const fa = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
-  /* ---------- product silhouette ---------- */
-  function productPath(c, s) {
-    // یک محفظه/سطل صنعتی تزریقی با لبه و دسته
-    const w = s * .78, h = s * .62, x = -w / 2, y = -h / 2 + s * .06;
-    const tp = s * .07; // taper
-    c.beginPath();
-    c.moveTo(x + tp * .3, y);
-    c.lineTo(x + w - tp * .3, y);
-    c.quadraticCurveTo(x + w, y, x + w - tp, y + h - s * .05);
-    c.quadraticCurveTo(x + w - tp, y + h, x + w - tp - s * .05, y + h);
-    c.lineTo(x + tp + s * .05, y + h);
-    c.quadraticCurveTo(x + tp, y + h, x + tp, y + h - s * .05);
-    c.quadraticCurveTo(x, y, x + tp * .3, y);
-    c.closePath();
-  }
-  function rimPath(c, s) {
-    const w = s * .92, h = s * .10, x = -w / 2, y = -s * .34, r = h / 2;
-    c.beginPath();
-    c.moveTo(x + r, y); c.lineTo(x + w - r, y);
-    c.quadraticCurveTo(x + w, y, x + w, y + r);
-    c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    c.lineTo(x + r, y + h);
-    c.quadraticCurveTo(x, y + h, x, y + r);
-    c.quadraticCurveTo(x, y, x + r, y);
-    c.closePath();
-  }
-
-  function sampleShape(size, n) {
-    const off = document.createElement('canvas');
-    const s = 320;
-    off.width = off.height = s;
-    const o = off.getContext('2d');
-    o.translate(s / 2, s / 2);
-    o.fillStyle = '#fff';
-    productPath(o, s * .92); o.fill();
-    rimPath(o, s * .92); o.fill();
-    // دسته‌ها (برش)
-    o.globalCompositeOperation = 'destination-out';
-    [-1, 1].forEach(d => {
-      o.beginPath();
-      o.ellipse(d * s * .27, s * .02, s * .055, s * .10, 0, 0, Math.PI * 2);
-      o.fill();
-    });
-    o.globalCompositeOperation = 'source-over';
-
-    const data = o.getImageData(0, 0, s, s).data;
-    const pts = [];
-    for (let y = 0; y < s; y += 2) {
-      for (let x = 0; x < s; x += 2) {
-        if (data[(y * s + x) * 4 + 3] > 140) {
-          pts.push([(x - s / 2) / s, (y - s / 2) / s]);
-        }
-      }
-    }
-    // shuffle
-    for (let i = pts.length - 1; i > 0; i--) {
-      const j = (Math.random() * (i + 1)) | 0;
-      [pts[i], pts[j]] = [pts[j], pts[i]];
-    }
-    const out = [];
-    for (let i = 0; i < n; i++) out.push(pts[i % pts.length]);
-    // ترتیب پر شدن: از گیت (بالا وسط) به بیرون
-    out.sort((a, b) => (a[1] + Math.abs(a[0]) * .55) - (b[1] + Math.abs(b[0]) * .55));
-    return out;
-  }
-
-  /* ---------- layout / particles ---------- */
+  /* ---------------- layout ---------------- */
   function layout() {
     DPR = Math.min(window.devicePixelRatio || 1, 1.6);
     W = canvas.clientWidth; H = canvas.clientHeight;
     canvas.width = W * DPR; canvas.height = H * DPR;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
-    const wide = W > 820;
-    S = Math.min(wide ? W * .44 : W * .80, H * .55);
-    cx = wide ? W * (document.dir === 'rtl' ? .30 : .70) : W * .5;
-    cy = wide ? H * .54 : H * .42;
+    const small = W < 760;
+    cx = W * .5;
+    cy = H * (small ? .44 : .50);
+    R = Math.min(W * (small ? .34 : .21), H * .27);
+    coneH = R * 1.80;
+    diskY = cy + R * .58;
+    coneTop = diskY - coneH;
+    Rd = R * .92; ry = Rd * .30; T = Rd * .26;
 
-    const N = W < 700 ? 620 : (W < 1200 ? 1000 : 1400);
-    shapePts = sampleShape(S, N);
-    build(N);
+    build(small ? 320 : 520, small ? 520 : 900);
   }
 
-  function build(N) {
-    particles = [];
+  function build(nRain, nSwarm) {
+    rain = [];
+    for (let i = 0; i < nRain; i++) {
+      const g = (Math.random() + Math.random() + Math.random()) / 3 - .5; // تمرکز روی مرکز
+      rain.push({
+        x: cx + g * R * 3.4,
+        seed: Math.random(),
+        sp: rnd(.10, .30),
+        sz: rnd(1.0, 3.2),
+        streak: Math.random() < .34,
+        br: rnd(.35, 1)
+      });
+    }
+    swarm = [];
+    for (let i = 0; i < nSwarm; i++) {
+      const h = Math.pow(Math.random(), .8);           // 0 بالا (پهن) … 1 پایین (باریک)
+      const onTop = Math.random() < .58;
+      const da = Math.random() * Math.PI * 2;
+      const dr = Math.sqrt(Math.random());
+      swarm.push({
+        a0: Math.random() * Math.PI * 2,
+        h,
+        spin: rnd(.55, 1.15),
+        wob: Math.random() * 6.28,
+        sz: rnd(1.1, 2.8),
+        br: rnd(.4, 1),
+        delay: Math.random() * .45,
+        // مقصد روی درب
+        dTop: onTop, da, dr, dv: Math.random(),
+        // بردار پاشیدن نهایی
+        bx: Math.cos(da) * rnd(.6, 2.2), by: rnd(-1.6, .5) - Math.abs(Math.sin(da)) * .4,
+        bs: rnd(.6, 1.6)
+      });
+    }
+  }
+
+  /* ---------------- positions ---------------- */
+  function rainPos(o) {
+    const span = coneH + R * 2.4;
+    const y = -R * .6 + ((t * o.sp + o.seed) % 1) * span;
+    return [o.x + Math.sin(t * .5 + o.seed * 9) * 5, y];
+  }
+  function vortexPos(o, tight) {
+    const h = o.h;
+    const ang = o.a0 + t * o.spin * (.55 + (1 - h) * 1.35);
+    const rad = R * (.16 + .84 * Math.pow(1 - h, .75)) * lerp(1.12, 1, tight);
+    return [
+      cx + Math.cos(ang) * rad,
+      coneTop + h * coneH + Math.sin(ang) * rad * .30 + Math.sin(t * 2 + o.wob) * 2
+    ];
+  }
+  function diskPos(o) {
+    const spin = t * .18;
+    if (o.dTop) {
+      const rr = Rd * .96 * o.dr, a = o.da + spin;
+      return [cx + Math.cos(a) * rr, diskY - T * .55 + Math.sin(a) * rr * .30];
+    }
+    const a = o.da + spin;
+    return [cx + Math.cos(a) * Rd, diskY - T * .55 + Math.sin(a) * Rd * .30 + o.dv * T];
+  }
+
+  /* ---------------- drawing bits ---------------- */
+  function drawRain(alpha) {
+    if (alpha <= .01) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const o of rain) {
+      const [x, y] = rainPos(o);
+      const a = alpha * o.br;
+      if (o.streak) {
+        const g = ctx.createLinearGradient(x, y - 90, x, y + 20);
+        g.addColorStop(0, 'rgba(70,140,255,0)');
+        g.addColorStop(1, `rgba(150,200,255,${a * .5})`);
+        ctx.strokeStyle = g; ctx.lineWidth = .8;
+        ctx.beginPath(); ctx.moveTo(x, y - 90); ctx.lineTo(x, y + 12); ctx.stroke();
+      }
+      ctx.fillStyle = `rgba(${150 + o.br * 90 | 0},${195 + o.br * 50 | 0},255,${a})`;
+      ctx.beginPath(); ctx.arc(x, y, o.sz, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawRings(alpha, tighten, flat) {
+    if (alpha <= .01) return;
+    const N = 16;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < N; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random());
-      particles.push({
-        // موقعیت اولیه پراکنده (گرانول‌های ریخته‌شده)
-        ix: cx + Math.cos(a) * r * S * .80,
-        iy: cy + Math.sin(a) * r * S * .62 - S * .05,
-        x: 0, y: 0,
-        d: Math.random(),                  // تاخیر شخصی
-        ph: Math.random() * Math.PI * 2,   // فاز نوسان
-        sp: rnd(.5, 1.6),
-        sz: rnd(1.6, 3.5),
-        tint: Math.random(),
-        tx: shapePts[i][0], ty: shapePts[i][1],
-        order: i / N
-      });
-    }
-  }
-
-  /* ---------- machine drawing ---------- */
-  function hopper(alpha, glow) {
-    if (alpha <= .01) return;
-    const topY = cy - S * .92, mouthY = cy - S * .56;
-    const halfTop = S * .30, halfBot = S * .055;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.beginPath();
-    ctx.moveTo(cx - halfTop, topY);
-    ctx.lineTo(cx + halfTop, topY);
-    ctx.lineTo(cx + halfBot, mouthY);
-    ctx.lineTo(cx - halfBot, mouthY);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(0, topY, 0, mouthY);
-    g.addColorStop(0, 'rgba(47,212,196,.05)');
-    g.addColorStop(1, 'rgba(47,212,196,.13)');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(47,212,196,${.32 + glow * .5})`;
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    // نازل
-    ctx.beginPath();
-    ctx.moveTo(cx - halfBot, mouthY);
-    ctx.lineTo(cx - halfBot * .5, cy - S * .46);
-    ctx.lineTo(cx + halfBot * .5, cy - S * .46);
-    ctx.lineTo(cx + halfBot, mouthY);
-    ctx.closePath();
-    ctx.fillStyle = `rgba(255,138,61,${.10 + glow * .55})`;
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function moldHalves(open, alpha) {
-    if (alpha <= .01) return;
-    const w = S * .62, h = S * .98, gap = open * S * .62;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = 1.4;
-    [-1, 1].forEach(d => {
-      const x = cx + d * (w / 2 + gap) - w / 2;
-      const y = cy - h / 2;
+      const k = i / (N - 1);
+      const h = k;
+      const radFlat = R * (.28 + .72 * k);                       // حلقه‌های هم‌مرکز
+      const radCone = R * (.16 + .84 * Math.pow(1 - h, .75));    // مخروط گردابه
+      const rad = lerp(radFlat, radCone, tighten) * lerp(1, .96, flat);
+      const yy = lerp(diskY - coneH * .26 + (k - .5) * R * .16, coneTop + h * coneH, tighten);
+      const rot = t * (.35 + (1 - h) * .5) + i * .4;
+      const a = alpha * (.12 + .52 * Math.pow(1 - Math.abs(k - .35), 2)) * lerp(1.7 - k * .7, 1, tighten);
+      ctx.save();
+      ctx.translate(cx, yy);
+      ctx.rotate(Math.sin(rot) * .06);
+      ctx.strokeStyle = `rgba(90,170,255,${a})`;
+      ctx.lineWidth = lerp(.7, 2.1, Math.sin(rot) * .5 + .5);
+      ctx.beginPath(); ctx.ellipse(0, 0, rad, rad * .30, 0, 0, 6.2832); ctx.stroke();
+      // ریبون درخشان
+      ctx.strokeStyle = `rgba(190,225,255,${a * .9})`;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, y, w, h, 10); else ctx.rect(x, y, w, h);
-      ctx.fillStyle = 'rgba(255,255,255,.035)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,.16)';
+      ctx.ellipse(0, 0, rad, rad * .30, 0, rot % 6.2832, (rot % 6.2832) + 1.5 + h * .8);
       ctx.stroke();
-      // پیچ‌های راهنما
-      ctx.fillStyle = 'rgba(255,255,255,.18)';
-      [.16, .84].forEach(t => {
-        ctx.beginPath();
-        ctx.arc(x + w * (d < 0 ? .16 : .84), y + h * t, 3, 0, 7);
-        ctx.fill();
-      });
-    });
+      ctx.restore();
+    }
     ctx.restore();
   }
 
-  function productOutline(a) {
-    if (a <= .01) return;
+  function drawGlowFloor(alpha) {
+    if (alpha <= .01) return;
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.globalAlpha = a;
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = 'rgba(47,212,196,.55)';
-    ctx.shadowColor = 'rgba(47,212,196,.6)';
-    ctx.shadowBlur = 18;
-    productPath(ctx, S * .92); ctx.stroke();
-    rimPath(ctx, S * .92); ctx.stroke();
-    ctx.restore();
-  }
-
-  function glossSweep(a, t) {
-    if (a <= .01) return;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.globalAlpha = a * .5;
-    ctx.beginPath();
-    productPath(ctx, S * .92);
-    ctx.clip();
-    const x = lerp(-S, S, (t % 1));
-    const g = ctx.createLinearGradient(x - S * .2, -S, x + S * .2, S);
-    g.addColorStop(0, 'rgba(255,255,255,0)');
-    g.addColorStop(.5, 'rgba(255,255,255,.30)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(cx, diskY, 0, cx, diskY, R * 2.1);
+    g.addColorStop(0, `rgba(60,130,255,${.30 * alpha})`);
+    g.addColorStop(.4, `rgba(40,90,220,${.12 * alpha})`);
+    g.addColorStop(1, 'rgba(10,20,60,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(-S, -S, S * 2, S * 2);
+    ctx.beginPath(); ctx.ellipse(cx, diskY, R * 2.1, R * .8, 0, 0, 6.2832); ctx.fill();
     ctx.restore();
   }
 
-  function caption(a) {
-    if (a <= .01) return;
+  function drawLidPhoto(alpha, rise) {
+    if (alpha <= .01 || !lidReady) return;
+    const w = Rd * 3.0;
+    const h = w * (lid.naturalHeight / lid.naturalWidth);
     ctx.save();
-    ctx.globalAlpha = a;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(232,240,245,.9)';
-    ctx.font = '700 15px Vazirmatn, sans-serif';
-    ctx.fillText('قطعه تحویل‌شده · PP گرید مهندسی', cx, cy + S * .62);
-    ctx.fillStyle = 'rgba(147,166,179,.85)';
-    ctx.font = '500 13px Vazirmatn, sans-serif';
-    ctx.fillText('سیکل ۲۲ ثانیه · قالب ۴ حفره · تلورانس ±۰٫۰۵ میلی‌متر', cx, cy + S * .62 + 24);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(lid, cx - w / 2, diskY - h * .52 + rise, w, h);
     ctx.restore();
   }
 
-  /* ---------- particle color ---------- */
-  function colorFor(pt, heat, solid) {
-    // granule → molten → cooled product
-    const cool = [
-      [122, 226, 214], [214, 234, 240], [255, 197, 130]
-    ][(pt.tint * 3) | 0];
-    const hot = [255, 150, 60];
-    const white = [255, 226, 190];
-    const fin = pt.tint > .72 ? [190, 214, 224] : [58, 200, 190];
-
-    let r, g, b;
-    const h = heat;
-    const hotMix = h < .6 ? h / .6 : 1;
-    r = lerp(cool[0], hot[0], hotMix);
-    g = lerp(cool[1], hot[1], hotMix);
-    b = lerp(cool[2], hot[2], hotMix);
-    if (h > .6) {
-      const t = (h - .6) / .4;
-      r = lerp(r, white[0], t); g = lerp(g, white[1], t); b = lerp(b, white[2], t);
-    }
-    if (solid > 0) {
-      r = lerp(r, fin[0], solid); g = lerp(g, fin[1], solid); b = lerp(b, fin[2], solid);
-    }
-    return `rgb(${r | 0},${g | 0},${b | 0})`;
-  }
-
-  /* ---------- main frame ---------- */
-  let time = 0;
+  /* ---------------- frame ---------------- */
   function frame() {
-    time += .016;
-    pSmooth = reduce ? p : lerp(pSmooth, p, .12);
-    const v = pSmooth;
+    t += .016;
+    pS = reduce ? p : lerp(pS, p, .10);
+    const v = pS;
 
     ctx.clearRect(0, 0, W, H);
 
-    // فازها
-    const sScatter = seg(v, .00, .16);   // پراکنده / چرخش آرام
-    const sFunnel = seg(v, .16, .36);   // ورود به قیف
-    const sMelt = seg(v, .34, .52);   // ذوب در بشکه
-    const sInject = seg(v, .50, .72);   // تزریق و پر شدن حفره
-    const sCool = seg(v, .70, .86);   // خنک‌کاری و باز شدن قالب
-    const sFinal = seg(v, .84, 1.0);   // قطعه نهایی
+    /* فازها */
+    const toVortex = smooth(seg(v, .10, .34));   // از بارش به گردابه
+    const tighten = smooth(seg(v, .20, .48));   // حلقه‌ها مخروطی می‌شوند
+    const toDisk = smooth(seg(v, .46, .70));   // نشستن روی فرم درب
+    const photo = smooth(seg(v, .68, .82));   // ظاهر شدن محصول واقعی
+    const hold = 1 - smooth(seg(v, .86, .93)); // شروع باز شدن
+    const burst = easeOut(seg(v, .86, 1));      // پاشیدن به گرانول
+    const gone = smooth(seg(v, .95, 1));
 
-    const heat = clamp(sMelt * 1.0) * (1 - sCool * .95);
-    const solid = smooth(sCool);
+    const rainA = (1 - smooth(seg(v, .46, .68))) * (1 - gone) + smooth(seg(v, .88, .97)) * .55 * (1 - gone);
+    const ringA = smooth(seg(v, .10, .30)) * (1 - smooth(seg(v, .62, .78)));
 
-    // پس‌زمینه گرمایی
-    if (heat > .02) {
-      const g = ctx.createRadialGradient(cx, cy - S * .35, 0, cx, cy - S * .35, S * 1.5);
-      g.addColorStop(0, `rgba(255,138,61,${.18 * heat})`);
-      g.addColorStop(1, 'rgba(255,138,61,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-    }
+    drawGlowFloor(smooth(seg(v, .30, .55)) * (1 - gone) * lerp(1, .5, photo));
+    drawRain(rainA);
+    drawRings(ringA, tighten, toDisk);
 
-    hopper(smooth(seg(v, .12, .26)) * (1 - seg(v, .62, .78)), heat);
-    moldHalves(easeOut(seg(v, .74, .92)), smooth(seg(v, .44, .58)) * (1 - seg(v, .88, 1)) );
-
-    const gateX = cx, gateY = cy - S * .46;
-
+    /* ذرات اصلی */
     ctx.save();
-    if (heat > .18) ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < particles.length; i++) {
-      const pt = particles[i];
-      let x, y, size = pt.sz, alpha = 1;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < swarm.length; i++) {
+      const o = swarm[i];
 
-      // 1) پراکنده با نوسان
-      const wob = Math.sin(time * pt.sp + pt.ph);
-      let sx = pt.ix + wob * 6;
-      let sy = pt.iy + Math.cos(time * pt.sp * .8 + pt.ph) * 5 + sScatter * 10;
+      // 1) بارش اولیه
+      const span = coneH + R * 2.2;
+      let x = cx + Math.cos(o.a0) * R * 2.2 * (.3 + o.dr);
+      let y = -R * .5 + ((t * (.12 + o.spin * .12) + o.h) % 1) * span;
 
-      // 2) به سمت دهانه قیف
-      const fT = easeOut(clamp((sFunnel - pt.d * .35) / .65));
-      const hopX = cx + (pt.tint - .5) * S * .10;
-      const hopY = cy - S * .60 + pt.d * S * .10;
-      x = lerp(sx, hopX, fT);
-      y = lerp(sy, hopY, fT);
+      // 2) گردابه
+      const kV = clamp((toVortex - o.delay * .5) / (1 - o.delay * .5));
+      const [vx, vy] = vortexPos(o, tighten);
+      x = lerp(x, vx, kV); y = lerp(y, vy, kV);
 
-      // 3) ذوب: فشرده شدن در نازل
-      const mT = ease(clamp((sMelt - pt.order * .25) / .75));
-      x = lerp(x, gateX + (pt.tint - .5) * S * .03, mT);
-      y = lerp(y, gateY - S * .02, mT);
-      size = lerp(size, size * .75, mT);
+      // 3) نشستن روی فرم محصول
+      const kD = clamp((toDisk - o.h * .30) / .70);
+      const [dx, dy] = diskPos(o);
+      x = lerp(x, dx, easeIO(kD)); y = lerp(y, dy, easeIO(kD));
 
-      // 4) تزریق: حرکت به جایگاه نهایی در حفره
-      const iT = easeOut(clamp((sInject - pt.order * .55) / .45));
-      const fx = cx + pt.tx * S;
-      const fy = cy + pt.ty * S;
-      // مسیر جت: کمی قوس
-      const jx = lerp(x, fx, iT);
-      const jy = lerp(y, fy, iT) - Math.sin(iT * Math.PI) * S * .05 * (1 - Math.abs(pt.tx));
-      x = jx; y = jy;
-
-      // 5) لرزش حرارتی که با خنک شدن می‌خوابد
-      const jitter = (1 - solid) * (heat * 2.2 + .4);
-      x += Math.sin(time * 3 + pt.ph) * jitter;
-      y += Math.cos(time * 2.4 + pt.ph) * jitter;
-
-      // 6) قطعه نهایی: کمی «نفس کشیدن»
-      if (sFinal > 0) {
-        const br = 1 + Math.sin(time * .9) * .012 * sFinal;
-        x = cx + (x - cx) * br;
-        y = cy + (y - cy) * br;
-        size = lerp(size, 2.6, sFinal);
+      // 4) پاشیدن دوباره به گرانول
+      if (burst > 0) {
+        const kB = easeOut(clamp((burst - o.delay * .3) / .7)) * o.bs;
+        x += o.bx * R * 1.6 * kB;
+        y += o.by * R * 1.5 * kB + kB * kB * R * .5;
       }
 
-      pt.x = x; pt.y = y;
+      let a = o.br * (.68 + .32 * kV);
+      a *= (1 - photo * .92);                      // هنگام نمایش عکس محو می‌شوند
+      a += o.br * smooth(seg(v, .86, .93)) * .95;  // و دوباره برمی‌گردند
+      a *= (1 - gone);
+      if (a <= .01) continue;
 
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = colorFor(pt, heat, solid);
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, 6.2832);
-      ctx.fill();
+      const sz = o.sz * lerp(1, .8, kD);
+      ctx.fillStyle = `rgba(${140 + o.br * 100 | 0},${190 + o.br * 55 | 0},255,${clamp(a)})`;
+      ctx.beginPath(); ctx.arc(x, y, sz, 0, 6.2832); ctx.fill();
     }
     ctx.restore();
-    ctx.shadowBlur = 0;
 
-    productOutline(smooth(seg(v, .80, .95)));
-    glossSweep(smooth(seg(v, .88, 1)), time * .25);
-    caption(smooth(seg(v, .92, 1)));
+    /* محصول نهایی */
+    drawLidPhoto(photo * hold, lerp(10, 0, photo));
 
     requestAnimationFrame(frame);
   }
 
-  /* ---------- scroll wiring ---------- */
-  const bounds = [0, .16, .34, .50, .70, .86];
-  let lastStep = -1;
-
+  /* ---------------- scroll ---------------- */
+  const bounds = [0, .12, .30, .46, .62, .74, .90];
+  let last = -1;
   function onScroll() {
     const r = scene.getBoundingClientRect();
     const total = scene.offsetHeight - window.innerHeight;
     p = clamp(-r.top / total);
-
     if (bar) bar.style.width = (p * 100).toFixed(1) + '%';
-
     let idx = 0;
     for (let i = 0; i < bounds.length; i++) if (p >= bounds[i]) idx = i;
-    if (idx !== lastStep) {
+    if (idx !== last) {
       steps.forEach((el, i) => el.classList.toggle('is-on', i === idx));
-      lastStep = idx;
-    }
-    if (tempEl) {
-      const t = p < .34 ? 25 : p < .55 ? lerp(25, 265, seg(p, .34, .55))
-        : p < .72 ? 265 : lerp(265, 38, seg(p, .72, .95));
-      tempEl.textContent = fa(Math.round(t)) + '°C';
+      last = idx;
     }
   }
 
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', () => { layout(); onScroll(); });
-  layout();
-  onScroll();
+  layout(); onScroll();
   requestAnimationFrame(frame);
 })();
