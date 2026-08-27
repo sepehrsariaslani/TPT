@@ -90,9 +90,9 @@ function getQualityCount() {
   if (typeof window === 'undefined') return 1900;
   const width = window.innerWidth;
   const cores = navigator.hardwareConcurrency || 6;
-  if (width < 680) return cores <= 4 ? 700 : 940;
-  if (width < 1100) return cores <= 4 ? 1180 : 1580;
-  return cores <= 4 ? 1850 : 2600;
+  if (width < 680) return cores <= 4 ? 720 : 980;
+  if (width < 1100) return cores <= 4 ? 1240 : 1650;
+  return cores <= 4 ? 1900 : 2700;
 }
 
 function buildParticleData(count, compact) {
@@ -104,114 +104,132 @@ function buildParticleData(count, compact) {
     depth: (random() - 0.5) * 2,
     width: (random() - 0.5) * 2,
     size: 0.82 + random() * 0.2,
-    speed: 0.84 + random() * 0.2,
+    speed: 0.82 + random() * 0.22,
     tint: random(),
     variant: random() < 0.76 ? 0 : 1,
-    tumble: 0.74 + random() * 0.45,
-    fuseOffset: (random() - 0.5) * 0.026,
+    tumble: 0.7 + random() * 0.42,
+    fuseOffset: (random() - 0.5) * 0.022,
     compact,
   }));
 }
 
 function resolveParticle(item, progress, time, position, euler, scale) {
   const compact = item.compact;
-  const topY = compact ? 6.4 : 5.8;
-  const bottomY = compact ? -6.2 : -5.1;
-  const topSpread = compact ? 3.45 : 6.15;
-  const lowerSpread = compact ? 0.72 : 1.12;
-  const depthSpread = compact ? 0.8 : 1.5;
 
-  const movingT = (
+  // 1) Calm feed: continuous material from above the viewport, still coming from
+  // both sides. There is no packet/clump timing, so the stream never looks cropped.
+  const feedT = (
     item.t
-    + time * 0.0135 * item.speed
-    + Math.min(progress, 0.19) * 0.34
+    + time * 0.0125 * item.speed
+    + Math.min(progress, 0.11) * 0.2
   ) % 1;
-  const feedEase = smooth(movingT);
-  const feedX = item.side * THREE.MathUtils.lerp(topSpread, lowerSpread, feedEase)
-    + item.width * THREE.MathUtils.lerp(compact ? 0.48 : 0.92, compact ? 0.16 : 0.3, feedEase)
-    + Math.sin(item.phase + movingT * 4.1) * 0.12;
-  const feedY = THREE.MathUtils.lerp(topY, bottomY, movingT)
-    + Math.sin(item.phase * 0.6 + movingT * Math.PI) * 0.08;
-  const feedZ = item.depth * THREE.MathUtils.lerp(depthSpread, compact ? 0.34 : 0.5, feedEase)
-    + Math.sin(item.phase + movingT * 3.2) * 0.18;
+  const feedEase = smooth(feedT);
+  const feedTopY = compact ? 6.8 : 6.25;
+  const feedBottomY = compact ? -6.4 : -5.55;
+  const feedOuter = compact ? 3.4 : 5.7;
+  const feedInner = compact ? 1.55 : 2.7;
+  const feedX = item.side * THREE.MathUtils.lerp(feedOuter, feedInner, feedEase)
+    + item.width * THREE.MathUtils.lerp(compact ? 0.52 : 0.82, 0.28, feedEase)
+    + Math.sin(item.phase + feedT * 3.6) * 0.1;
+  const feedY = THREE.MathUtils.lerp(feedTopY, feedBottomY, feedT);
+  const feedZ = item.depth * THREE.MathUtils.lerp(compact ? 0.72 : 1.25, 0.5, feedEase)
+    + Math.sin(item.phase + feedT * 2.8) * 0.14;
 
-  const funnelT = item.t;
-  const funnelEase = smooth(funnelT);
-  const funnelX = item.side * THREE.MathUtils.lerp(compact ? 1.9 : 3.0, compact ? 0.46 : 0.72, funnelEase)
-    + item.width * THREE.MathUtils.lerp(0.24, 0.05, funnelEase)
-    + Math.sin(item.phase + funnelT * 2.0) * (compact ? 0.14 : 0.22);
-  const funnelY = THREE.MathUtils.lerp(compact ? 4.8 : 4.5, compact ? -2.7 : -2.45, funnelT)
-    + Math.sin(item.phase * 0.7) * 0.08;
-  const funnelZ = item.depth * THREE.MathUtils.lerp(compact ? 0.48 : 0.8, 0.18, funnelEase)
-    + item.side * Math.sin(funnelT * Math.PI) * (compact ? 0.13 : 0.22);
+  // 2) Cinematic storm restored from the older experience, but calmer. The
+  // pellets orbit the same centre while the cone narrows toward the hopper.
+  const stormT = (
+    item.t
+    + time * 0.017 * item.speed
+    + Math.min(Math.max(progress - 0.1, 0), 0.18) * 0.16
+  ) % 1;
+  const stormEase = smooth(stormT);
+  const stormOuter = compact ? 2.75 : 3.95;
+  const stormInner = compact ? 0.78 : 1.02;
+  const stormRadius = THREE.MathUtils.lerp(stormOuter, stormInner, stormEase)
+    * (0.94 + Math.sin(item.phase * 1.7) * 0.06);
+  const stormAngle = item.phase
+    + stormT * TAU * 2.55
+    + time * 0.13
+    + item.side * 0.08;
+  const stormX = Math.cos(stormAngle) * stormRadius;
+  const stormY = THREE.MathUtils.lerp(compact ? 5.25 : 5.55, 3.55, stormT)
+    + Math.sin(item.phase * 0.8) * 0.07;
+  const stormZ = Math.sin(stormAngle) * stormRadius * (compact ? 0.62 : 0.7)
+    + item.depth * 0.08;
 
-  const compressedEase = smooth(item.t);
-  const compressedX = item.side * THREE.MathUtils.lerp(compact ? 0.82 : 1.22, 0.11, compressedEase)
-    + Math.cos(item.phase) * (compact ? 0.09 : 0.15);
-  const compressedY = THREE.MathUtils.lerp(compact ? 2.7 : 2.5, 0.72, item.t)
-    + Math.sin(item.phase) * 0.055;
-  const compressedZ = item.depth * THREE.MathUtils.lerp(compact ? 0.28 : 0.42, 0.08, compressedEase)
-    + Math.sin(item.phase) * (compact ? 0.07 : 0.11);
+  // 3) Funnel into the hopper mouth. The radius physically collapses while the
+  // centre of mass drops, so the pellets visibly enter the reservoir instead of
+  // converging beneath the machine.
+  const pourT = (
+    item.t
+    + time * 0.012 * item.speed
+  ) % 1;
+  const pourEase = smooth(pourT);
+  const pourRadius = THREE.MathUtils.lerp(compact ? 1.28 : 1.5, 0.24, pourEase);
+  const pourAngle = item.phase + pourT * TAU * 0.82 + time * 0.06;
+  const pourX = Math.cos(pourAngle) * pourRadius;
+  const pourY = THREE.MathUtils.lerp(compact ? 4.55 : 4.72, 3.0, pourT);
+  const pourZ = Math.sin(pourAngle) * pourRadius * 0.72 + item.depth * 0.035;
 
-  const preRadius = (compact ? 0.12 : 0.15) + ((item.phase / TAU) % 1) * (compact ? 0.32 : 0.48);
-  const preX = Math.cos(item.phase) * preRadius + item.side * 0.05;
-  const preY = THREE.MathUtils.lerp(1.72, 0.98, item.t) + Math.sin(item.phase * 1.3) * 0.04;
-  const preZ = Math.sin(item.phase) * preRadius * 0.76;
+  // 4) Inside the transparent barrel: pellets follow the screw flight downward
+  // before they soften and disappear into the continuous melt.
+  const insideT = clamp01(item.t * 0.94 + 0.03);
+  const insideRadius = THREE.MathUtils.lerp(compact ? 0.28 : 0.34, 0.16, insideT);
+  const insideAngle = item.phase + insideT * TAU * 2.25 + time * 0.08;
+  const insideX = Math.cos(insideAngle) * insideRadius;
+  const insideY = THREE.MathUtils.lerp(2.88, 1.22, insideT);
+  const insideZ = Math.sin(insideAngle) * insideRadius * 0.82;
 
-  const absorbRadius = 0.035 + ((item.phase * 0.37) % 1) * (compact ? 0.09 : 0.13);
-  const absorbX = Math.cos(item.phase) * absorbRadius;
-  const absorbY = 0.95 + (0.5 - item.t) * 0.12;
-  const absorbZ = Math.sin(item.phase) * absorbRadius * 0.7;
+  const stormMix = range(progress, 0.105, 0.215);
+  const pourMix = range(progress, 0.255, 0.345);
+  const insideMix = range(progress, 0.335, 0.435);
 
-  const toFunnel = range(progress, 0.105, 0.225);
-  const toCompressed = range(progress, 0.22, 0.335);
-  const toPreform = range(progress, 0.32, 0.425);
-  const toAbsorb = range(progress, 0.415, 0.535);
+  let x = THREE.MathUtils.lerp(feedX, stormX, stormMix);
+  let y = THREE.MathUtils.lerp(feedY, stormY, stormMix);
+  let z = THREE.MathUtils.lerp(feedZ, stormZ, stormMix);
 
-  let x = THREE.MathUtils.lerp(feedX, funnelX, toFunnel);
-  let y = THREE.MathUtils.lerp(feedY, funnelY, toFunnel);
-  let z = THREE.MathUtils.lerp(feedZ, funnelZ, toFunnel);
-  if (progress >= 0.22) {
-    x = THREE.MathUtils.lerp(funnelX, compressedX, toCompressed);
-    y = THREE.MathUtils.lerp(funnelY, compressedY, toCompressed);
-    z = THREE.MathUtils.lerp(funnelZ, compressedZ, toCompressed);
+  if (progress >= 0.255) {
+    x = THREE.MathUtils.lerp(stormX, pourX, pourMix);
+    y = THREE.MathUtils.lerp(stormY, pourY, pourMix);
+    z = THREE.MathUtils.lerp(stormZ, pourZ, pourMix);
   }
-  if (progress >= 0.32) {
-    x = THREE.MathUtils.lerp(compressedX, preX, toPreform);
-    y = THREE.MathUtils.lerp(compressedY, preY, toPreform);
-    z = THREE.MathUtils.lerp(compressedZ, preZ, toPreform);
-  }
-  if (progress >= 0.415) {
-    x = THREE.MathUtils.lerp(preX, absorbX, toAbsorb);
-    y = THREE.MathUtils.lerp(preY, absorbY, toAbsorb);
-    z = THREE.MathUtils.lerp(preZ, absorbZ, toAbsorb);
+  if (progress >= 0.335) {
+    x = THREE.MathUtils.lerp(pourX, insideX, insideMix);
+    y = THREE.MathUtils.lerp(pourY, insideY, insideMix);
+    z = THREE.MathUtils.lerp(pourZ, insideZ, insideMix);
   }
 
-  const turbulence = Math.sin(range(progress, 0.12, 0.36) * Math.PI) * 0.045;
+  const stormStrength = range(progress, 0.105, 0.18) * (1 - range(progress, 0.31, 0.37));
+  const micro = 0.004 + item.tumble * 0.002;
   position.set(
-    x + Math.cos(item.phase + time * 0.31) * turbulence,
-    y + Math.sin(item.phase * 0.7 + time * 0.27) * turbulence * 0.06,
-    z + Math.sin(item.phase + time * 0.29) * turbulence * 0.55,
+    x + Math.cos(item.phase + time * 0.31) * micro * (1 - stormStrength * 0.45),
+    y + Math.sin(item.phase * 0.71 + time * 0.26) * micro * 0.5,
+    z + Math.sin(item.phase + time * 0.28) * micro,
   );
 
-  const freeTumble = 1 - range(progress, 0.34, 0.48);
+  // Keep self rotation restrained. The obvious motion during the storm comes
+  // from the path itself, not every pellet spinning like a propeller.
+  const tumbleFade = 1 - range(progress, 0.36, 0.48);
   euler.set(
-    item.phase + Math.sin(time * 0.16 * item.tumble + item.phase) * 0.018 * freeTumble,
-    item.phase * 0.61 + item.side * -0.055 * (1 - range(progress, 0.16, 0.34)),
-    item.phase * 0.37 + Math.cos(time * 0.14 + item.phase) * 0.015 * freeTumble,
+    item.phase + Math.sin(time * 0.14 * item.tumble + item.phase) * 0.017 * tumbleFade,
+    item.phase * 0.61 + item.side * -0.05 * (1 - range(progress, 0.18, 0.34)),
+    item.phase * 0.37 + Math.cos(time * 0.13 + item.phase) * 0.014 * tumbleFade,
   );
 
-  // The pellet first loses its crisp cylindrical silhouette, then is absorbed
-  // into the surrounding polymer. This overlap avoids the old shrink-to-zero pop.
-  const soften = range(progress, 0.275, 0.43);
-  const fuse = range(progress, 0.405 + item.fuseOffset, 0.555 + item.fuseOffset * 0.22);
-  const fusionScale = THREE.MathUtils.lerp(1, 0.018, fuse);
+  // Melting happens only after the pellets are already inside the barrel. The
+  // lower pellets soften first; upper pellets follow a few frames later.
+  const soften = range(progress, 0.365, 0.475);
+  const meltOrder = smooth(insideT);
+  const fuseStart = 0.405 + (1 - meltOrder) * 0.038 + item.fuseOffset;
+  const fuseEnd = 0.525 + (1 - meltOrder) * 0.026 + item.fuseOffset * 0.22;
+  const fuse = range(progress, fuseStart, fuseEnd);
+  const fusionScale = THREE.MathUtils.lerp(1, 0.015, fuse);
   const base = item.size * fusionScale;
-  const roundness = soften * (1 - fuse * 0.35);
+  const roundness = soften * (1 - fuse * 0.4);
   scale.set(
-    base * THREE.MathUtils.lerp(1, 0.82, roundness),
+    base * THREE.MathUtils.lerp(1, 0.8, roundness),
+    base * THREE.MathUtils.lerp(1, 1.2, roundness),
     base * THREE.MathUtils.lerp(1, 1.18, roundness),
-    base * THREE.MathUtils.lerp(1, 1.16, roundness),
   );
 }
 
@@ -277,16 +295,32 @@ export default function PhotorealGranules({ progressRef }) {
 
   const materials = useMemo(() => [
     new THREE.MeshPhysicalMaterial({
-      color: '#245f9f', roughness: 0.36, metalness: 0, clearcoat: 0.26,
-      clearcoatRoughness: 0.25, ior: 1.47, specularIntensity: 0.43,
-      specularColor: new THREE.Color('#9fc4e8'), bumpMap: microTexture,
-      bumpScale: 0.0018, envMapIntensity: 0.7, vertexColors: true,
+      color: '#245f9f',
+      roughness: 0.36,
+      metalness: 0,
+      clearcoat: 0.26,
+      clearcoatRoughness: 0.25,
+      ior: 1.47,
+      specularIntensity: 0.43,
+      specularColor: new THREE.Color('#9fc4e8'),
+      bumpMap: microTexture,
+      bumpScale: 0.0018,
+      envMapIntensity: 0.7,
+      vertexColors: true,
     }),
     new THREE.MeshPhysicalMaterial({
-      color: '#2e6bab', roughness: 0.34, metalness: 0, clearcoat: 0.29,
-      clearcoatRoughness: 0.23, ior: 1.47, specularIntensity: 0.45,
-      specularColor: new THREE.Color('#afd0ef'), bumpMap: microTexture,
-      bumpScale: 0.0016, envMapIntensity: 0.73, vertexColors: true,
+      color: '#2e6bab',
+      roughness: 0.34,
+      metalness: 0,
+      clearcoat: 0.29,
+      clearcoatRoughness: 0.23,
+      ior: 1.47,
+      specularIntensity: 0.45,
+      specularColor: new THREE.Color('#afd0ef'),
+      bumpMap: microTexture,
+      bumpScale: 0.0016,
+      envMapIntensity: 0.73,
+      vertexColors: true,
     }),
   ], [microTexture]);
 
