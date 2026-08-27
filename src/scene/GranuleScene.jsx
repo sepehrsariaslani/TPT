@@ -98,22 +98,22 @@ function CapModel({ progressRef }) {
     if (!group) return;
 
     const p = progressRef.current;
-    // Product starts appearing only after the material is already compressed.
-    // It reaches a fully opaque, clean state before the sticky section ends.
-    const reveal = range(p, 0.63, 0.87);
-    const lock = range(p, 0.86, 0.94);
+    // The cap now resolves earlier. The last quarter of the sticky sequence is a
+    // clean hero hold instead of making the user keep scrolling through fusion.
+    const reveal = range(p, 0.52, 0.73);
+    const lock = range(p, 0.72, 0.82);
 
     shellMaterial.opacity = reveal;
     edgeMaterial.opacity = reveal;
     shellMaterial.emissiveIntensity = 0.02 + (1 - reveal) * 0.045;
     edgeMaterial.emissiveIntensity = 0.035 + (1 - reveal) * 0.06;
 
-    group.position.y = THREE.MathUtils.damp(group.position.y, (1 - reveal) * 0.28, 4.8, delta);
-    group.scale.x = THREE.MathUtils.damp(group.scale.x, 0.93 + reveal * 0.07, 4.5, delta);
-    group.scale.z = THREE.MathUtils.damp(group.scale.z, 0.93 + reveal * 0.07, 4.5, delta);
-    group.scale.y = THREE.MathUtils.damp(group.scale.y, 0.38 + reveal * 0.62, 4.7, delta);
-    group.rotation.y = p * 0.25 + clock.getElapsedTime() * (0.009 - lock * 0.006);
-    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, (1 - reveal) * -0.01, 3.2, delta);
+    group.position.y = THREE.MathUtils.damp(group.position.y, (1 - reveal) * 0.25, 5.2, delta);
+    group.scale.x = THREE.MathUtils.damp(group.scale.x, 0.93 + reveal * 0.07, 5.0, delta);
+    group.scale.z = THREE.MathUtils.damp(group.scale.z, 0.93 + reveal * 0.07, 5.0, delta);
+    group.scale.y = THREE.MathUtils.damp(group.scale.y, 0.42 + reveal * 0.58, 5.0, delta);
+    group.rotation.y = p * 0.21 + clock.getElapsedTime() * (0.008 - lock * 0.0055);
+    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, (1 - reveal) * -0.009, 3.5, delta);
   });
 
   return (
@@ -150,7 +150,7 @@ function CapModel({ progressRef }) {
 function BackgroundDust() {
   const geometry = useMemo(() => {
     const random = seededRandom(222);
-    const count = typeof window !== 'undefined' && window.innerWidth < 680 ? 90 : 150;
+    const count = typeof window !== 'undefined' && window.innerWidth < 680 ? 70 : 140;
     const positions = new Float32Array(count * 3);
 
     for (let i = 0; i < count; i += 1) {
@@ -169,30 +169,46 @@ function BackgroundDust() {
 
   return (
     <points geometry={geometry}>
-      <pointsMaterial color="#3d658f" size={0.011} transparent opacity={0.1} depthWrite={false} />
+      <pointsMaterial color="#3d658f" size={0.011} transparent opacity={0.09} depthWrite={false} />
     </points>
   );
 }
 
 function CameraRig({ progressRef }) {
-  const { camera, pointer } = useThree();
+  const { camera, pointer, size } = useThree();
   const target = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
     const p = progressRef.current;
-    const braid = range(p, 0.17, 0.36) * (1 - range(p, 0.54, 0.68));
-    const preform = range(p, 0.48, 0.66) * (1 - range(p, 0.76, 0.88));
-    const product = range(p, 0.63, 0.88);
+    const mobile = size.width <= 680;
+    const tablet = size.width > 680 && size.width <= 980;
+    const braid = range(p, 0.12, 0.31) * (1 - range(p, 0.49, 0.61));
+    const preform = range(p, 0.36, 0.53) * (1 - range(p, 0.65, 0.76));
+    const product = range(p, 0.52, 0.74);
 
-    const targetX = pointer.x * 0.12;
-    const targetY = 3.1 + pointer.y * 0.07 - product * 0.23 + braid * 0.04;
-    const targetZ = 11.25 - product * 0.64 + preform * 0.08;
+    const pointerAmount = mobile ? 0 : tablet ? 0.07 : 0.12;
+    const targetX = pointer.x * pointerAmount;
+    const targetY = mobile
+      ? 2.55 - product * 0.18 + braid * 0.025
+      : 3.08 + pointer.y * 0.07 - product * 0.23 + braid * 0.04;
+    const targetZ = mobile
+      ? 16.25 - product * 0.72 + preform * 0.06
+      : tablet
+        ? 13.3 - product * 0.72 + preform * 0.07
+        : 11.25 - product * 0.64 + preform * 0.08;
 
-    camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 3.0, delta);
-    camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3.0, delta);
-    camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 3.0, delta);
+    camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 3.2, delta);
+    camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3.2, delta);
+    camera.position.z = THREE.MathUtils.damp(camera.position.z, targetZ, 3.2, delta);
 
-    target.set(0, 0.22 - product * 0.14, 0);
+    const targetFov = mobile ? 44 : tablet ? 41 : 38;
+    const nextFov = THREE.MathUtils.damp(camera.fov, targetFov, 3.5, delta);
+    if (Math.abs(nextFov - camera.fov) > 0.001) {
+      camera.fov = nextFov;
+      camera.updateProjectionMatrix();
+    }
+
+    target.set(0, mobile ? 0.08 - product * 0.08 : 0.22 - product * 0.14, 0);
     camera.lookAt(target);
   });
 
@@ -200,11 +216,19 @@ function CameraRig({ progressRef }) {
 }
 
 function PostFX() {
+  const { size } = useThree();
+  const mobile = size.width <= 680;
+
   return (
     <ErrorBoundary scope="postprocessing" silent fallback={null}>
       <EffectComposer multisampling={0}>
-        <Bloom intensity={0.36} luminanceThreshold={0.76} luminanceSmoothing={0.9} mipmapBlur />
-        <Vignette eskil={false} offset={0.14} darkness={0.56} />
+        <Bloom
+          intensity={mobile ? 0.25 : 0.36}
+          luminanceThreshold={mobile ? 0.8 : 0.76}
+          luminanceSmoothing={0.9}
+          mipmapBlur
+        />
+        <Vignette eskil={false} offset={mobile ? 0.2 : 0.14} darkness={mobile ? 0.48 : 0.56} />
       </EffectComposer>
     </ErrorBoundary>
   );
