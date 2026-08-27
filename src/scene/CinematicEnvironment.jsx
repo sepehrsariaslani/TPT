@@ -39,17 +39,13 @@ export default function CinematicEnvironment({ progressRef }) {
 
     const room = new RoomEnvironment();
     const pmrem = new THREE.PMREMGenerator(gl);
-    const target = pmrem.fromScene(room, 0.045);
+    const target = pmrem.fromScene(room, 0.055);
 
     scene.environment = target.texture;
-    scene.environmentIntensity = 1.02;
+    scene.environmentIntensity = 0.74;
     gl.toneMapping = THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = 1.02;
+    gl.toneMappingExposure = 0.96;
     gl.outputColorSpace = THREE.SRGBColorSpace;
-
-    // Shadows are intentionally disabled. The reference relies on glossy studio
-    // reflections and luminous filaments, while realtime shadow maps were one of
-    // the largest unnecessary GPU costs during startup and scrolling.
     gl.shadowMap.enabled = false;
 
     return () => {
@@ -67,56 +63,56 @@ export default function CinematicEnvironment({ progressRef }) {
   useFrame(({ clock }) => {
     const p = progressRef.current;
     if (rigRef.current) {
-      rigRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.07) * 0.014 + p * 0.02;
+      rigRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.065) * 0.012 + p * 0.016;
     }
-    scene.environmentIntensity = 1.0 + Math.sin(Math.min(1, p) * Math.PI) * 0.12;
+    scene.environmentIntensity = 0.72 + Math.sin(Math.min(1, p) * Math.PI) * 0.08;
   });
 
   return (
     <group ref={rigRef}>
-      <hemisphereLight intensity={0.28} color="#d3e6ff" groundColor="#01040a" />
-      <ambientLight intensity={0.055} color="#44658e" />
+      <hemisphereLight intensity={0.24} color="#b9d8ff" groundColor="#01040a" />
+      <ambientLight intensity={0.04} color="#31557f" />
 
       <AreaLight
         position={[3.8, 7.4, 6.4]}
         target={[0, 0.6, 0]}
-        color="#f5fbff"
-        intensity={19}
+        color="#d8ecff"
+        intensity={10.5}
         width={5.8}
         height={8.0}
       />
       <AreaLight
         position={[-5.6, 2.4, 4.4]}
         target={[0, 0.15, 0]}
-        color="#5e9eff"
-        intensity={9.2}
+        color="#4f91e8"
+        intensity={7.2}
         width={4.4}
         height={6.8}
       />
       <AreaLight
         position={[0.2, 4.8, -5.8]}
         target={[0, 0.35, 0]}
-        color="#2f76ff"
-        intensity={11.5}
+        color="#2e6ed2"
+        intensity={8.2}
         width={5.0}
         height={4.4}
       />
 
       <spotLight
         position={[1.8, 8.6, 6.6]}
-        intensity={13}
+        intensity={6.5}
         angle={0.38}
         penumbra={0.98}
         distance={22}
         decay={2}
-        color="#eaf5ff"
+        color="#dceeff"
       />
       <pointLight
         position={[0, -2.2, 1.8]}
-        intensity={6.5}
+        intensity={4.0}
         distance={9}
         decay={2}
-        color="#1558ca"
+        color="#124fae"
       />
     </group>
   );
