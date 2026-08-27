@@ -14,39 +14,39 @@ const smooth = (t) => {
 const STAGES = [
   {
     number: '01',
-    code: 'RAW MATERIAL',
-    title: 'ورود مواد اولیه',
-    body: 'گرانول‌های پلیمر در چند لاین مستقل و پیوسته وارد فرآیند می‌شوند؛ جریان ماده هیچ‌وقت قطع نمی‌شود.',
+    code: 'MATERIAL FEED',
+    title: 'خوراک‌دهی مواد اولیه',
+    body: 'گرانول ترموپلاستیک، پس از آماده‌سازی و در صورت نیاز خشک‌کردن، از هاپر وارد واحد تزریق می‌شود و برای سیکل بعدی در دسترس مارپیچ قرار می‌گیرد.',
   },
   {
     number: '02',
-    code: 'FLOW ALIGNMENT',
-    title: 'هدایت و هم‌راستاسازی',
-    body: 'لاین‌های جدا آرام به مرکز خم می‌شوند و یک جریان کنترل‌شده و منظم را شکل می‌دهند.',
+    code: 'PLASTICIZING',
+    title: 'ذوب و پلاستیک‌سازی',
+    body: 'مارپیچ رفت‌وبرگشتی داخل سیلندر گرم می‌چرخد؛ گرانول‌ها به جلو منتقل، ذوب و همگن می‌شوند و حجم شات در جلوی مارپیچ شکل می‌گیرد.',
   },
   {
     number: '03',
-    code: 'COMPRESSION',
-    title: 'فشرده‌سازی جریان',
-    body: 'مسیرها روی هم جمع می‌شوند؛ فاصله‌ی دانه‌ها کمتر می‌شود و جرم ماده به فرم متراکم نزدیک می‌شود.',
+    code: 'CLAMPING',
+    title: 'بستن و قفل‌کردن قالب',
+    body: 'دو نیمه‌ی قالب پیش از تزریق کاملاً بسته می‌شوند و واحد گیره نیروی لازم را اعمال می‌کند تا قالب در برابر فشار تزریق باز نشود.',
   },
   {
     number: '04',
-    code: 'PREFORM',
-    title: 'ساخت پیش‌فرم',
-    body: 'جریان فشرده تخت می‌شود و به صورت لایه‌های متحدالمرکز، هندسه‌ی اولیه‌ی محصول را می‌سازد.',
+    code: 'INJECTION / FILL',
+    title: 'تزریق و پرشدن حفره',
+    body: 'مارپیچ به جلو حرکت می‌کند و مذاب از نازل و سیستم تغذیه‌ی قالب، از راهگاه و گیت، با سرعت و فشار کنترل‌شده وارد حفره‌ی قطعه می‌شود.',
   },
   {
     number: '05',
-    code: 'FUSION',
-    title: 'همجوشی و شکل‌گیری',
-    body: 'هر گرانول به نقطه‌ی هدف روی سطح می‌رسد و به‌تدریج در پوسته‌ی محصول جذب می‌شود؛ بدون پرش ناگهانی.',
+    code: 'HOLD / COOL',
+    title: 'فشار نگهدار و خنک‌کاری',
+    body: 'پس از پرشدن حفره، فشار نگهدار برای جبران جمع‌شدگی اعمال می‌شود. سپس کانال‌های خنک‌کاری حرارت را می‌گیرند تا قطعه به استحکام لازم برسد.',
   },
   {
     number: '06',
-    code: 'FINAL PRODUCT',
-    title: 'محصول نهایی',
-    body: 'جریان ماده کامل شده است. سطح تمیز، یکپارچه و آماده است تا تجربه وارد بخش بعدی سایت شود.',
+    code: 'MOLD OPEN / EJECT',
+    title: 'بازشدن قالب و خروج قطعه',
+    body: 'وقتی قطعه به اندازه‌ی کافی سرد و پایدار شد، قالب باز می‌شود و سیستم پران قطعه را خارج می‌کند؛ هم‌زمان دستگاه برای شات بعدی آماده می‌شود.',
   },
 ];
 
@@ -145,7 +145,7 @@ export default function App() {
 
         <nav className={`topbar__nav ${menuOpen ? 'is-open' : ''}`}>
           <a href="#experience" onClick={() => setMenuOpen(false)}>تجربه</a>
-          <a href="#product" onClick={() => setMenuOpen(false)}>محصول</a>
+          <a href="#product" onClick={() => setMenuOpen(false)}>فرآیند</a>
           <a href="#contact" onClick={() => setMenuOpen(false)}>تماس</a>
         </nav>
 
@@ -216,10 +216,10 @@ export default function App() {
               <h1>
                 از <strong>گرانول</strong>
                 <br />
-                تا فرم نهایی.
+                تا قطعه‌ی نهایی.
               </h1>
               <p className="hero-copy__body">
-                با اسکرول، چند جریان مستقل ماده به هم نزدیک می‌شوند، فشرده می‌شوند و در یک تبدیل پیوسته به محصول نهایی می‌رسند.
+                با اسکرول، مراحل واقعی یک سیکل تزریق پلاستیک را دنبال کنید؛ از ورود گرانول به هاپر و پلاستیک‌سازی تا تزریق، خنک‌کاری و خروج قطعه از قالب.
               </p>
             </div>
 
@@ -242,13 +242,13 @@ export default function App() {
             </aside>
 
             <div className="scroll-cue" style={{ opacity: 1 - smooth(uiProgress / 0.065) }}>
-              <span>SCROLL TO FORM</span>
+              <span>SCROLL THROUGH THE CYCLE</span>
               <ArrowDown />
             </div>
 
             <div className="product-halo-copy" style={{ opacity: productMoment }}>
               <span className="product-halo-copy__line" />
-              <span>FORM / 001</span>
+              <span>MOULDED PART / 001</span>
               <span className="product-halo-copy__line" />
             </div>
 
@@ -264,16 +264,16 @@ export default function App() {
             </div>
 
             <div className="corner-data corner-data--left" aria-hidden="true">
-              <span>RAW → FORM</span>
+              <span>PELLET → PART</span>
               <b>{String(Math.round(uiProgress * 100)).padStart(3, '0')}</b>
             </div>
             <div className="corner-data corner-data--right" aria-hidden="true">
-              <span>TPT / POLYMER</span>
-              <b>PROCESS 01</b>
+              <span>TPT / INJECTION</span>
+              <b>CYCLE 01</b>
             </div>
 
             <div className="outro-cue" style={{ opacity: finalFade }}>
-              <span>محصول کامل شد — ادامه دهید</span>
+              <span>قطعه آماده‌ی خروج از قالب است — ادامه دهید</span>
               <ArrowDown />
             </div>
           </div>
@@ -281,19 +281,19 @@ export default function App() {
 
         <section className="product-section reveal-section" id="product">
           <div className="product-section__glow" />
-          <div className="section-kicker">TPT / PRODUCT SYSTEM</div>
+          <div className="section-kicker">TPT / INJECTION MOLDING CYCLE</div>
           <div className="product-section__grid">
             <div>
-              <h2>یک حرکت پیوسته،<br />از ماده تا محصول.</h2>
+              <h2>کنترل ماده، فشار و دما<br />تا رسیدن به قطعه‌ی پایدار.</h2>
             </div>
             <div className="product-section__copy">
               <p>
-                چند جریان گرانول در یک مسیر کنترل‌شده جمع می‌شوند، پیش‌فرم محصول را می‌سازند و در مرحله‌ی نهایی به یک پوسته‌ی تمیز و یکپارچه تبدیل می‌شوند.
+                در تزریق پلاستیک، گرانول داخل سیلندر گرم پلاستیک‌سازی می‌شود، شات مذاب با حرکت رو به جلوی مارپیچ وارد قالب بسته می‌شود و پس از مرحله‌ی فشار نگهدار و خنک‌کاری، قطعه‌ی جامد از قالب خارج می‌شود.
               </p>
               <div className="mini-specs">
-                <span><b>01</b> Multi Stream</span>
-                <span><b>02</b> Compression</span>
-                <span><b>03</b> Final Form</span>
+                <span><b>01</b> Hopper / Screw</span>
+                <span><b>02</b> Injection / Hold</span>
+                <span><b>03</b> Cool / Eject</span>
               </div>
             </div>
           </div>
@@ -301,26 +301,26 @@ export default function App() {
           <div className="product-plates">
             <article>
               <span>Material</span>
-              <strong>PP / PE / ABS</strong>
-              <small>قابل تنظیم برای گرید واقعی مواد شما</small>
+              <strong>Thermoplastic Resin</strong>
+              <small>PP، PE، ABS و سایر مواد متناسب با قطعه و کاربرد</small>
             </article>
             <article>
-              <span>Motion</span>
-              <strong>Scroll Scrub</strong>
-              <small>تبدیل سریع‌تر، پیوسته و قابل برگشت با اسکرول</small>
+              <span>Process Control</span>
+              <strong>Pressure / Temp / Time</strong>
+              <small>کیفیت نهایی به کنترل فشار، دمای مذاب و قالب، سرعت تزریق و زمان خنک‌کاری وابسته است</small>
             </article>
             <article>
-              <span>Rendering</span>
-              <strong>WebGL / Three.js</strong>
-              <small>رندر زنده و واکنش‌گرا برای دسکتاپ و موبایل</small>
+              <span>Final Part</span>
+              <strong>Moulded & Ejected</strong>
+              <small>پس از انجماد کافی، قالب باز می‌شود و قطعه با سیستم پران از حفره خارج می‌شود</small>
             </article>
           </div>
         </section>
 
         <section className="contact-section reveal-section" id="contact">
           <div>
-            <span className="section-kicker">NEXT / REAL PRODUCT</span>
-            <h2>مرحله بعد: مدل دقیق محصول واقعی TPT.</h2>
+            <span className="section-kicker">NEXT / PRODUCTION PART</span>
+            <h2>مدل سه‌بعدی دقیق قطعه را می‌توان با هندسه‌ی واقعی محصول تولیدی جایگزین کرد.</h2>
           </div>
           <a className="contact-button" href="mailto:info@tpt.ir">
             <span>شروع پروژه</span>
