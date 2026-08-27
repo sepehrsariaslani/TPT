@@ -24,18 +24,16 @@ function seededRandom(seed = 55291) {
 function createMeltTexture(seed = 411, size = 64) {
   const random = seededRandom(seed);
   const pixels = new Uint8Array(size * size);
-
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       const nx = x / size;
       const ny = y / size;
-      const slow = Math.sin(nx * TAU * 2.6 + ny * 2.2) * 1.8;
-      const streak = Math.sin(nx * TAU * 7.2 - ny * 4.5) * 0.8;
-      const grain = (random() - 0.5) * 3.0;
-      pixels[y * size + x] = Math.max(0, Math.min(255, 128 + slow + streak + grain));
+      const broad = Math.sin(nx * TAU * 2.2 + ny * 2.4) * 1.5;
+      const streak = Math.sin(nx * TAU * 6.6 - ny * 4.1) * 0.65;
+      const grain = (random() - 0.5) * 2.7;
+      pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + streak + grain));
     }
   }
-
   const texture = new THREE.DataTexture(
     pixels,
     size,
@@ -45,7 +43,7 @@ function createMeltTexture(seed = 411, size = 64) {
   );
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2.5, 4.8);
+  texture.repeat.set(2.8, 4.1);
   texture.colorSpace = THREE.NoColorSpace;
   texture.needsUpdate = true;
   return texture;
@@ -53,53 +51,15 @@ function createMeltTexture(seed = 411, size = 64) {
 
 function buildBlobData(count) {
   const random = seededRandom(88421);
-  return Array.from({ length: count }, () => {
-    const pick = random();
-    const lane = pick < 0.37 ? -1 : pick < 0.74 ? 1 : 0;
-    return {
-      lane,
-      t: random(),
-      phase: random() * TAU,
-      depth: (random() - 0.5) * 2,
-      scale: 0.78 + random() * 0.36,
-      speed: 0.82 + random() * 0.24,
-      delay: random() * 0.055,
-      stretch: 0.9 + random() * 0.34,
-    };
-  });
-}
-
-function resolvePoint(item, compact, time, visibility, position, tangent, nextPosition) {
-  const driftT = (item.t + time * 0.0024 * item.speed * visibility) % 1;
-  const t = clamp01(driftT * 0.94 + 0.03);
-  const eps = 0.012;
-
-  const sample = (value, target) => {
-    const s = smooth(clamp01(value));
-    const side = item.lane;
-    const width = compact ? 0.72 : 1;
-
-    if (side === 0) {
-      target.set(
-        Math.sin(item.phase + value * 2.1) * 0.11 * (1 - s),
-        THREE.MathUtils.lerp(1.52, 0.46, value),
-        item.depth * 0.08 * (1 - s) + Math.cos(item.phase) * 0.06,
-      );
-      return;
-    }
-
-    target.set(
-      side * THREE.MathUtils.lerp(1.72 * width, 0.28 * width, s)
-        + Math.sin(item.phase + value * 1.8) * 0.14 * (1 - s),
-      THREE.MathUtils.lerp(3.05, 0.74, value),
-      item.depth * THREE.MathUtils.lerp(0.34, 0.09, s)
-        + side * Math.sin(value * Math.PI) * 0.1,
-    );
-  };
-
-  sample(t, position);
-  sample(Math.min(1, t + eps), nextPosition);
-  tangent.copy(nextPosition).sub(position).normalize();
+  return Array.from({ length: count }, () => ({
+    t: random(),
+    phase: random() * TAU,
+    radius: 0.15 + random() * 0.65,
+    depth: (random() - 0.5) * 2,
+    scale: 0.78 + random() * 0.3,
+    delay: random() * 0.045,
+    speed: 0.84 + random() * 0.2,
+  }));
 }
 
 export default function PlasticizingMelt({ progressRef }) {
@@ -107,181 +67,184 @@ export default function PlasticizingMelt({ progressRef }) {
   const compact = size.width <= 680;
   const groupRef = useRef();
   const blobsRef = useRef();
-  const slugRef = useRef();
+  const massRef = useRef();
+  const neckRef = useRef();
   const gateRef = useRef();
-  const centreLightRef = useRef();
+  const lightRef = useRef();
 
   const helper = useMemo(() => new THREE.Object3D(), []);
-  const position = useMemo(() => new THREE.Vector3(), []);
-  const nextPosition = useMemo(() => new THREE.Vector3(), []);
-  const tangent = useMemo(() => new THREE.Vector3(), []);
-  const quaternion = useMemo(() => new THREE.Quaternion(), []);
-  const baseAxis = useMemo(() => new THREE.Vector3(0, 1, 0), []);
-
   const meltTexture = useMemo(() => createMeltTexture(), []);
+  const blobData = useMemo(() => buildBlobData(compact ? 54 : 82), [compact]);
   const blobGeometry = useMemo(
-    () => new THREE.SphereGeometry(0.19, compact ? 12 : 16, compact ? 8 : 12),
+    () => new THREE.SphereGeometry(0.16, compact ? 12 : 16, compact ? 8 : 12),
     [compact],
   );
-  const slugGeometry = useMemo(
-    () => new THREE.SphereGeometry(0.5, compact ? 18 : 24, compact ? 12 : 16),
+  const massGeometry = useMemo(
+    () => new THREE.SphereGeometry(0.48, compact ? 18 : 26, compact ? 12 : 18),
     [compact],
   );
-  const blobData = useMemo(() => buildBlobData(compact ? 58 : 94), [compact]);
 
-  const coldColor = useMemo(() => new THREE.Color('#245f9f'), []);
-  const warmColor = useMemo(() => new THREE.Color('#1c64a7'), []);
-  const hotColor = useMemo(() => new THREE.Color('#1764a9'), []);
+  const coolColor = useMemo(() => new THREE.Color('#245f9f'), []);
+  const softColor = useMemo(() => new THREE.Color('#2165aa'), []);
+  const meltColor = useMemo(() => new THREE.Color('#1b5f9f'), []);
 
   const blobMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: coldColor.clone(),
+    color: coolColor.clone(),
     metalness: 0,
-    roughness: 0.29,
-    clearcoat: 0.34,
-    clearcoatRoughness: 0.2,
+    roughness: 0.31,
+    clearcoat: 0.28,
+    clearcoatRoughness: 0.22,
     ior: 1.47,
-    specularIntensity: 0.48,
-    specularColor: new THREE.Color('#b7d1e8'),
+    specularIntensity: 0.45,
+    specularColor: new THREE.Color('#b9d0e3'),
     bumpMap: meltTexture,
-    bumpScale: 0.0014,
-    envMapIntensity: 0.76,
+    bumpScale: 0.00135,
+    envMapIntensity: 0.72,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     depthTest: true,
-  }), [coldColor, meltTexture]);
+  }), [coolColor, meltTexture]);
 
-  const slugMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: warmColor.clone(),
+  const massMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: softColor.clone(),
     metalness: 0,
-    roughness: 0.23,
-    clearcoat: 0.48,
-    clearcoatRoughness: 0.15,
+    roughness: 0.24,
+    clearcoat: 0.43,
+    clearcoatRoughness: 0.16,
     ior: 1.47,
-    specularIntensity: 0.52,
-    specularColor: new THREE.Color('#c8ddec'),
+    specularIntensity: 0.5,
+    specularColor: new THREE.Color('#c4d9e9'),
     bumpMap: meltTexture,
-    bumpScale: 0.0012,
-    envMapIntensity: 0.8,
+    bumpScale: 0.001,
+    envMapIntensity: 0.78,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     depthTest: true,
-  }), [meltTexture, warmColor]);
+  }), [meltTexture, softColor]);
 
   useEffect(() => {
     if (blobsRef.current) {
       blobsRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       blobsRef.current.renderOrder = 3;
     }
-
     return () => {
       blobGeometry.dispose();
-      slugGeometry.dispose();
+      massGeometry.dispose();
       blobMaterial.dispose();
-      slugMaterial.dispose();
+      massMaterial.dispose();
       meltTexture.dispose();
     };
-  }, [blobGeometry, slugGeometry, blobMaterial, slugMaterial, meltTexture]);
+  }, [blobGeometry, massGeometry, blobMaterial, massMaterial, meltTexture]);
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current;
     const blobs = blobsRef.current;
-    const slug = slugRef.current;
+    const mass = massRef.current;
+    const neck = neckRef.current;
     const gate = gateRef.current;
-    if (!group || !blobs || !slug || !gate) return;
+    if (!group || !blobs || !mass || !neck || !gate) return;
 
     const p = progressRef.current;
     const time = clock.getElapsedTime();
-    const soften = range(p, 0.205, 0.292);
-    const merge = range(p, 0.27, 0.405);
-    const delivery = range(p, 0.35, 0.47);
-    const handoff = range(p, 0.485, 0.575);
+    const soften = range(p, 0.255, 0.34);
+    const coalesce = range(p, 0.31, 0.425);
+    const melt = range(p, 0.365, 0.47);
+    const gateDelivery = range(p, 0.43, 0.525);
+    const handoff = range(p, 0.52, 0.595);
     const visibility = soften * (1 - handoff);
 
     group.visible = visibility > 0.003;
     if (!group.visible) return;
 
-    blobMaterial.opacity = visibility * THREE.MathUtils.lerp(0.72, 0.46, merge);
-    slugMaterial.opacity = visibility * merge * THREE.MathUtils.lerp(0.3, 0.76, delivery);
+    blobMaterial.opacity = visibility * THREE.MathUtils.lerp(0.68, 0.18, coalesce);
+    massMaterial.opacity = visibility * THREE.MathUtils.lerp(0.08, 0.84, melt);
+    blobMaterial.color.lerpColors(coolColor, softColor, coalesce);
+    massMaterial.color.lerpColors(softColor, meltColor, gateDelivery);
 
-    blobMaterial.color.lerpColors(coldColor, warmColor, merge);
-    slugMaterial.color.lerpColors(warmColor, hotColor, delivery);
-    blobMaterial.roughness = THREE.MathUtils.lerp(0.3, 0.19, merge);
-    blobMaterial.clearcoat = THREE.MathUtils.lerp(0.3, 0.52, merge);
-    blobMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.22, 0.13, merge);
-    slugMaterial.roughness = THREE.MathUtils.lerp(0.24, 0.17, delivery);
-    slugMaterial.clearcoat = THREE.MathUtils.lerp(0.42, 0.62, delivery);
-    slugMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.17, 0.11, delivery);
+    blobMaterial.roughness = THREE.MathUtils.lerp(0.31, 0.22, coalesce);
+    blobMaterial.clearcoat = THREE.MathUtils.lerp(0.28, 0.4, coalesce);
+    blobMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.22, 0.16, coalesce);
+    massMaterial.roughness = THREE.MathUtils.lerp(0.24, 0.18, gateDelivery);
+    massMaterial.clearcoat = THREE.MathUtils.lerp(0.43, 0.54, gateDelivery);
+    massMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.16, 0.12, gateDelivery);
 
     for (let i = 0; i < blobData.length; i += 1) {
       const item = blobData[i];
-      const localSoft = range(p, 0.205 + item.delay, 0.295 + item.delay);
-      const localMerge = range(p, 0.275 + item.delay * 0.5, 0.41 + item.delay * 0.35);
-      resolvePoint(item, compact, time, visibility, position, tangent, nextPosition);
-      quaternion.setFromUnitVectors(baseAxis, tangent);
+      const localSoft = range(p, 0.255 + item.delay, 0.345 + item.delay);
+      const localMerge = range(p, 0.315 + item.delay * 0.4, 0.43 + item.delay * 0.2);
+      const t = clamp01(item.t * 0.9 + 0.05);
+      const narrow = THREE.MathUtils.lerp(1, 0.18, localMerge);
+      const y = THREE.MathUtils.lerp(compact ? 2.45 : 2.7, 0.66, t);
+      const spiral = item.phase + t * 1.05;
+      const radial = item.radius * narrow;
 
-      const sideFactor = item.lane === 0 ? 0.86 : 1;
-      const radialMerge = THREE.MathUtils.lerp(0.66, 1.12, localMerge);
-      const elongation = THREE.MathUtils.lerp(0.88, 1.78, localMerge) * item.stretch;
-      const appear = 0.12 + localSoft * 0.88;
-      const exit = 1 - handoff * 0.56;
-
-      helper.position.copy(position);
-      helper.quaternion.copy(quaternion);
-      helper.scale.set(
-        item.scale * sideFactor * 0.72 * radialMerge * appear * exit,
-        item.scale * elongation * appear * exit,
-        item.scale * sideFactor * 0.68 * radialMerge * appear * exit,
+      helper.position.set(
+        Math.cos(spiral) * radial + Math.sin(item.phase * 0.4) * 0.05 * (1 - localMerge),
+        y + Math.sin(item.phase + time * 0.2) * 0.025,
+        Math.sin(spiral) * radial * 0.76 + item.depth * 0.07 * (1 - localMerge),
       );
+      helper.rotation.set(
+        Math.sin(item.phase) * 0.12,
+        item.phase * 0.22,
+        Math.cos(item.phase) * 0.1,
+      );
+      const appear = 0.15 + localSoft * 0.85;
+      const dissolve = THREE.MathUtils.lerp(1, 0.18, localMerge);
+      const rounded = THREE.MathUtils.lerp(0.82, 1.05, localMerge);
+      const base = item.scale * appear * dissolve;
+      helper.scale.set(base * rounded, base * THREE.MathUtils.lerp(1.18, 0.92, localMerge), base * rounded);
       helper.updateMatrix();
       blobs.setMatrixAt(i, helper.matrix);
     }
     blobs.instanceMatrix.needsUpdate = true;
 
-    const slugVisible = merge * (1 - handoff);
-    slug.visible = slugVisible > 0.003;
-    slug.position.y = THREE.MathUtils.damp(
-      slug.position.y,
-      THREE.MathUtils.lerp(1.05, 0.68, delivery),
-      5.2,
+    const massVisible = melt * (1 - handoff * 0.82);
+    mass.visible = massVisible > 0.003;
+    mass.position.y = THREE.MathUtils.damp(
+      mass.position.y,
+      THREE.MathUtils.lerp(1.18, 0.72, gateDelivery),
+      5.4,
       delta,
     );
-    slug.scale.x = THREE.MathUtils.damp(
-      slug.scale.x,
-      (compact ? 0.55 : 0.66) * THREE.MathUtils.lerp(0.72, 1, delivery),
-      5.2,
+    const massPulse = 1 + Math.sin(time * 0.45) * 0.008 * melt;
+    mass.scale.x = THREE.MathUtils.damp(
+      mass.scale.x,
+      (compact ? 0.72 : 0.84) * THREE.MathUtils.lerp(0.72, 1, coalesce) * massPulse,
+      5.4,
       delta,
     );
-    slug.scale.z = THREE.MathUtils.damp(
-      slug.scale.z,
-      (compact ? 0.5 : 0.61) * THREE.MathUtils.lerp(0.72, 1, delivery),
-      5.2,
+    mass.scale.z = THREE.MathUtils.damp(
+      mass.scale.z,
+      (compact ? 0.62 : 0.74) * THREE.MathUtils.lerp(0.72, 1, coalesce) / massPulse,
+      5.4,
       delta,
     );
-    slug.scale.y = THREE.MathUtils.damp(
-      slug.scale.y,
-      THREE.MathUtils.lerp(1.1, compact ? 2.0 : 2.35, delivery) * (1 - handoff * 0.3),
-      5.2,
-      delta,
-    );
-
-    gate.visible = delivery > 0.003 && handoff < 0.98;
-    gate.position.y = THREE.MathUtils.damp(gate.position.y, 0.43, 5.5, delta);
-    const gateScale = THREE.MathUtils.lerp(0.38, 0.72, delivery) * (1 - handoff * 0.45);
-    gate.scale.set(gateScale, gateScale * 0.72, gateScale);
-
-    group.rotation.y = THREE.MathUtils.damp(
-      group.rotation.y,
-      Math.sin(time * 0.13) * 0.0035 * visibility,
-      3.6,
+    mass.scale.y = THREE.MathUtils.damp(
+      mass.scale.y,
+      THREE.MathUtils.lerp(0.85, 1.28, melt) * (1 - handoff * 0.18),
+      5.4,
       delta,
     );
 
-    if (centreLightRef.current) {
-      centreLightRef.current.intensity = THREE.MathUtils.damp(
-        centreLightRef.current.intensity,
-        visibility * (0.32 + merge * 0.58 + delivery * 0.28),
+    const neckVisible = gateDelivery * (1 - handoff);
+    neck.visible = neckVisible > 0.003;
+    neck.position.y = THREE.MathUtils.damp(neck.position.y, 0.56, 5.8, delta);
+    neck.scale.set(
+      THREE.MathUtils.lerp(0.13, 0.19, gateDelivery),
+      THREE.MathUtils.lerp(0.3, 0.5, gateDelivery),
+      THREE.MathUtils.lerp(0.13, 0.19, gateDelivery),
+    );
+
+    gate.visible = neckVisible > 0.003;
+    const gateScale = THREE.MathUtils.lerp(0.2, 0.42, gateDelivery) * (1 - handoff * 0.55);
+    gate.scale.setScalar(gateScale);
+
+    if (lightRef.current) {
+      lightRef.current.intensity = THREE.MathUtils.damp(
+        lightRef.current.intensity,
+        visibility * (0.2 + coalesce * 0.3 + melt * 0.26),
         5,
         delta,
       );
@@ -297,18 +260,22 @@ export default function PlasticizingMelt({ progressRef }) {
         renderOrder={3}
       />
 
-      <mesh ref={slugRef} geometry={slugGeometry} material={slugMaterial} visible={false} />
+      <mesh ref={massRef} geometry={massGeometry} material={massMaterial} visible={false} />
 
-      <mesh ref={gateRef} position={[0, 0.43, 0]} material={slugMaterial} visible={false}>
-        <sphereGeometry args={[0.19, compact ? 14 : 18, compact ? 10 : 12]} />
+      <mesh ref={neckRef} position={[0, 0.56, 0]} material={massMaterial} visible={false}>
+        <capsuleGeometry args={[0.18, 0.36, 6, compact ? 12 : 18]} />
+      </mesh>
+
+      <mesh ref={gateRef} position={[0, 0.42, 0]} material={massMaterial} visible={false}>
+        <sphereGeometry args={[0.2, compact ? 14 : 18, compact ? 10 : 12]} />
       </mesh>
 
       <pointLight
-        ref={centreLightRef}
-        position={[0, 0.9, 2.3]}
-        color="#9fc2df"
+        ref={lightRef}
+        position={[0, 0.95, 2.2]}
+        color="#9db8cf"
         intensity={0}
-        distance={5}
+        distance={4.8}
         decay={2}
       />
     </group>
