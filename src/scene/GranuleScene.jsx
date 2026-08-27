@@ -245,7 +245,9 @@ export default function GranuleScene({ progressRef }) {
       <color attach="background" args={['#020713']} />
       <fog attach="fog" args={['#020713', 11, 27]} />
 
-      <CinematicEnvironment progressRef={progressRef} />
+      <ErrorBoundary scope="environment" silent fallback={null}>
+        <CinematicEnvironment progressRef={progressRef} />
+      </ErrorBoundary>
       <BackgroundDust />
       <VortexSystem progressRef={progressRef} />
       <HaloRings progressRef={progressRef} />
