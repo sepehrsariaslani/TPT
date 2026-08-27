@@ -30,8 +30,8 @@ function createMouldTexture(seed = 1409, size = 64) {
     for (let x = 0; x < size; x += 1) {
       const nx = x / size;
       const ny = y / size;
-      const broad = Math.sin(nx * TAU * 4.0 + ny * 3.2) * 1.7;
-      const fine = Math.sin(nx * TAU * 18.0 - ny * 13.0) * 0.7;
+      const broad = Math.sin(nx * TAU * 4 + ny * 3.2) * 1.7;
+      const fine = Math.sin(nx * TAU * 18 - ny * 13) * 0.7;
       const grain = (random() - 0.5) * 4.2;
       pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + fine + grain));
     }
@@ -75,10 +75,8 @@ function createShadowTexture(size = 96) {
 }
 
 function createCapBodyGeometry() {
-  // A single revolved profile gives the cap a continuous moulded silhouette:
-  // bottom wall, side wall, rounded shoulder, top rim and a very shallow crown.
   const profile = [
-    [0.0, -0.405],
+    [0, -0.405],
     [2.30, -0.405],
     [2.405, -0.385],
     [2.475, -0.335],
@@ -90,7 +88,7 @@ function createCapBodyGeometry() {
     [2.255, 0.392],
     [1.92, 0.404],
     [0.72, 0.386],
-    [0.0, 0.378],
+    [0, 0.378],
   ].map(([radius, y]) => new THREE.Vector2(radius, y));
 
   const geometry = new THREE.LatheGeometry(profile, 144);
@@ -98,10 +96,47 @@ function createCapBodyGeometry() {
   return geometry;
 }
 
+function addRadialFillMask(material) {
+  const fillRadius = { value: -0.08 };
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uFillRadius = fillRadius;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec3 vInjectionLocalPosition;',
+      )
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvInjectionLocalPosition = position;',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec3 vInjectionLocalPosition;\nuniform float uFillRadius;',
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        // Centre-gated cavity fill: the product is physically revealed from the
+        // gate outwards instead of fading in as a complete pre-existing mesh.
+        vec2 injectionPlane = vec2(vInjectionLocalPosition.x * 0.985, vInjectionLocalPosition.z * 1.015);
+        float injectionRadius = length(injectionPlane);
+        if (injectionRadius > uFillRadius) discard;`,
+      );
+  };
+
+  material.customProgramCacheKey = () => 'tpt-cap-radial-injection-fill-v2';
+  material.needsUpdate = true;
+  return fillRadius;
+}
+
 export default function RealisticCap({ progressRef }) {
   const groupRef = useRef();
   const ribsRef = useRef();
   const shadowRef = useRef();
+  const flowFrontRef = useRef();
+  const gatePoolRef = useRef();
 
   const mouldTexture = useMemo(() => createMouldTexture(), []);
   const shadowTexture = useMemo(() => createShadowTexture(), []);
@@ -111,26 +146,31 @@ export default function RealisticCap({ progressRef }) {
     [],
   );
 
+  const hotBodyColor = useMemo(() => new THREE.Color('#2a73c4'), []);
+  const solidBodyColor = useMemo(() => new THREE.Color('#154e98'), []);
+
   const bodyMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#154e98',
+    color: hotBodyColor.clone(),
     metalness: 0,
-    roughness: 0.34,
-    clearcoat: 0.34,
-    clearcoatRoughness: 0.24,
+    roughness: 0.17,
+    clearcoat: 0.86,
+    clearcoatRoughness: 0.1,
     ior: 1.47,
-    specularIntensity: 0.48,
-    specularColor: new THREE.Color('#b9d4ee'),
+    specularIntensity: 0.62,
+    specularColor: new THREE.Color('#c8dff4'),
     sheen: 0.025,
     sheenRoughness: 0.72,
     sheenColor: new THREE.Color('#2d67a8'),
     bumpMap: mouldTexture,
     bumpScale: 0.0017,
-    envMapIntensity: 0.72,
-    transparent: true,
-    opacity: 0,
+    envMapIntensity: 0.9,
+    transparent: false,
+    opacity: 1,
     depthWrite: true,
     depthTest: true,
-  }), [mouldTexture]);
+  }), [hotBodyColor, mouldTexture]);
+
+  const fillRadiusUniform = useMemo(() => addRadialFillMask(bodyMaterial), [bodyMaterial]);
 
   const ribMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#123f7d',
@@ -181,6 +221,22 @@ export default function RealisticCap({ progressRef }) {
     depthTest: true,
   }), []);
 
+  const moltenFrontMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#3982d1',
+    metalness: 0,
+    roughness: 0.11,
+    clearcoat: 0.98,
+    clearcoatRoughness: 0.06,
+    ior: 1.47,
+    specularIntensity: 0.74,
+    specularColor: new THREE.Color('#e1effb'),
+    envMapIntensity: 1.04,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: true,
+  }), []);
+
   const shadowMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#000000',
     map: shadowTexture,
@@ -222,6 +278,7 @@ export default function RealisticCap({ progressRef }) {
     ribMaterial.dispose();
     detailMaterial.dispose();
     highlightMaterial.dispose();
+    moltenFrontMaterial.dispose();
     shadowMaterial.dispose();
   }, [
     bodyGeometry,
@@ -232,6 +289,7 @@ export default function RealisticCap({ progressRef }) {
     ribMaterial,
     detailMaterial,
     highlightMaterial,
+    moltenFrontMaterial,
     shadowMaterial,
   ]);
 
@@ -240,29 +298,72 @@ export default function RealisticCap({ progressRef }) {
     if (!group) return;
 
     const p = progressRef.current;
-    const reveal = range(p, 0.49, 0.69);
-    const settle = range(p, 0.64, 0.76);
-    const opacity = Math.min(1, reveal * 1.02);
 
-    bodyMaterial.opacity = opacity;
-    ribMaterial.opacity = opacity;
-    detailMaterial.opacity = opacity;
-    highlightMaterial.opacity = opacity;
-    shadowMaterial.opacity = reveal * 0.48;
+    // Stage 03 — Injection / cavity fill. Area growth is approximately linear,
+    // therefore radius follows sqrt(fill). That makes the front feel materially
+    // plausible instead of moving at a constant, synthetic radial speed.
+    const injection = range(p, 0.405, 0.595);
+    const radialProgress = Math.sqrt(injection);
+    const fillRadius = THREE.MathUtils.lerp(0.025, 2.67, radialProgress);
+    fillRadiusUniform.value = fillRadius;
 
-    group.visible = reveal > 0.002;
-    group.position.y = THREE.MathUtils.damp(group.position.y, (1 - reveal) * 0.18, 5.4, delta);
-    group.scale.x = THREE.MathUtils.damp(group.scale.x, 0.95 + reveal * 0.05, 5.1, delta);
-    group.scale.z = THREE.MathUtils.damp(group.scale.z, 0.95 + reveal * 0.05, 5.1, delta);
-    group.scale.y = THREE.MathUtils.damp(group.scale.y, 0.58 + reveal * 0.42, 5.3, delta);
+    const outerFill = range(p, 0.545, 0.625);
+    const cooling = range(p, 0.575, 0.745);
+    const settle = range(p, 0.68, 0.8);
+    const injectionActivity = range(p, 0.392, 0.43) * (1 - range(p, 0.585, 0.655));
 
-    // A tiny, slow studio turn only after the part has solidified.
+    // Molten polymer transitions into the final moulded surface rather than the
+    // cap changing opacity. Highlights calm down as the part cools and solidifies.
+    bodyMaterial.color.lerpColors(hotBodyColor, solidBodyColor, cooling);
+    bodyMaterial.roughness = THREE.MathUtils.lerp(0.17, 0.34, cooling);
+    bodyMaterial.clearcoat = THREE.MathUtils.lerp(0.86, 0.34, cooling);
+    bodyMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.1, 0.24, cooling);
+    bodyMaterial.envMapIntensity = THREE.MathUtils.lerp(0.9, 0.72, cooling);
+
+    ribMaterial.opacity = outerFill;
+    detailMaterial.opacity = outerFill;
+    highlightMaterial.opacity = outerFill;
+    shadowMaterial.opacity = range(p, 0.59, 0.72) * 0.48;
+
+    group.visible = p > 0.397;
+    group.position.y = THREE.MathUtils.damp(group.position.y, 0, 5.4, delta);
+    group.scale.x = THREE.MathUtils.damp(group.scale.x, 1, 5.1, delta);
+    group.scale.y = THREE.MathUtils.damp(group.scale.y, 1, 5.1, delta);
+    group.scale.z = THREE.MathUtils.damp(group.scale.z, 1, 5.1, delta);
+
+    // A tiny studio turn begins only after the fill front has completed and the
+    // surface has substantially cooled. During injection the moulded part is still.
     const finalTurn = clock.getElapsedTime() * 0.0055 * settle;
-    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, p * 0.12 + finalTurn, 4.0, delta);
-    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, (1 - reveal) * -0.004, 4.0, delta);
+    group.rotation.y = THREE.MathUtils.damp(
+      group.rotation.y,
+      settle * (p * 0.12 + finalTurn),
+      4,
+      delta,
+    );
+    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, 0, 4, delta);
+
+    if (flowFrontRef.current) {
+      const frontVisible = injectionActivity * (1 - range(injection, 0.94, 1));
+      const wobbleX = 1 + Math.sin(clock.getElapsedTime() * 0.52) * 0.014;
+      const wobbleZ = 1 + Math.cos(clock.getElapsedTime() * 0.47) * 0.011;
+      flowFrontRef.current.visible = frontVisible > 0.003 && fillRadius > 0.12;
+      flowFrontRef.current.scale.set(
+        Math.max(0.08, fillRadius * wobbleX),
+        Math.max(0.08, fillRadius * wobbleZ),
+        1,
+      );
+      flowFrontRef.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.16) * 0.012;
+      moltenFrontMaterial.opacity = frontVisible * 0.42;
+    }
+
+    if (gatePoolRef.current) {
+      gatePoolRef.current.visible = injectionActivity > 0.003;
+      const gatePulse = 1 + Math.sin(clock.getElapsedTime() * 0.7) * 0.035 * injectionActivity;
+      gatePoolRef.current.scale.set(gatePulse, 1, gatePulse);
+    }
 
     if (shadowRef.current) {
-      shadowRef.current.scale.setScalar(0.94 + reveal * 0.06);
+      shadowRef.current.scale.setScalar(0.94 + cooling * 0.06);
     }
   });
 
@@ -270,14 +371,12 @@ export default function RealisticCap({ progressRef }) {
     <group ref={groupRef} visible={false}>
       <mesh geometry={bodyGeometry} material={bodyMaterial} />
 
-      {/* Fine moulded grip ribs: integrated with the shell, not glowing ornaments. */}
       <instancedMesh
         ref={ribsRef}
         args={[ribGeometry, ribMaterial, 120]}
         frustumCulled={false}
       />
 
-      {/* Subtle upper shoulder, concentric tooling groove and parting line. */}
       <mesh position={[0, 0.385, 0]} rotation={[Math.PI / 2, 0, 0]} material={highlightMaterial}>
         <torusGeometry args={[2.245, 0.026, 8, 128]} />
       </mesh>
@@ -288,17 +387,37 @@ export default function RealisticCap({ progressRef }) {
         <torusGeometry args={[2.507, 0.009, 6, 128]} />
       </mesh>
 
-      {/* Small gate witness at the top centre – a common real moulding detail. */}
       <mesh position={[0, 0.382, 0]} material={detailMaterial}>
         <cylinderGeometry args={[0.052, 0.052, 0.009, 32]} />
       </mesh>
 
-      {/* Lower sealing/inner edge glimpsed from the hero camera. */}
       <mesh position={[0, -0.398, 0]} rotation={[Math.PI / 2, 0, 0]} material={detailMaterial}>
         <torusGeometry args={[2.28, 0.045, 8, 112]} />
       </mesh>
 
-      {/* Soft optical contact shadow so the finished cap feels grounded. */}
+      {/* A very subtle wet flow front marks the leading edge of cavity filling. */}
+      <mesh
+        ref={flowFrontRef}
+        position={[0, 0.414, 0]}
+        rotation={[Math.PI / 2, 0, 0]}
+        material={moltenFrontMaterial}
+        visible={false}
+        renderOrder={5}
+      >
+        <torusGeometry args={[1, 0.012, 6, 128]} />
+      </mesh>
+
+      {/* Centre gate pool: small enough to read as a material source, not a glow effect. */}
+      <mesh
+        ref={gatePoolRef}
+        position={[0, 0.405, 0]}
+        material={moltenFrontMaterial}
+        visible={false}
+        renderOrder={5}
+      >
+        <cylinderGeometry args={[0.105, 0.105, 0.018, 40]} />
+      </mesh>
+
       <mesh
         ref={shadowRef}
         position={[0, -0.485, 0.06]}
