@@ -30,43 +30,45 @@ function CapModel({ progressRef }) {
   const ribsRef = useRef();
 
   const shellMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#1459c7',
-    emissive: '#03132f',
-    emissiveIntensity: 0.08,
+    color: '#0d4fa9',
+    emissive: '#010817',
+    emissiveIntensity: 0.025,
     metalness: 0,
-    roughness: 0.22,
-    clearcoat: 1,
-    clearcoatRoughness: 0.1,
+    roughness: 0.25,
+    clearcoat: 0.92,
+    clearcoatRoughness: 0.12,
     ior: 1.47,
-    specularIntensity: 0.9,
-    specularColor: new THREE.Color('#e8f3ff'),
-    sheen: 0.15,
-    sheenRoughness: 0.4,
-    sheenColor: new THREE.Color('#4d8fe6'),
-    envMapIntensity: 1.3,
+    specularIntensity: 0.72,
+    specularColor: new THREE.Color('#b9d8f5'),
+    sheen: 0.08,
+    sheenRoughness: 0.48,
+    sheenColor: new THREE.Color('#2d71bf'),
+    envMapIntensity: 1.08,
     transparent: true,
     opacity: 0,
     depthWrite: true,
+    depthTest: true,
   }), []);
 
   const edgeMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#236fd8',
-    emissive: '#06265e',
-    emissiveIntensity: 0.12,
+    color: '#1f6bc7',
+    emissive: '#02112c',
+    emissiveIntensity: 0.04,
     metalness: 0,
-    roughness: 0.18,
+    roughness: 0.2,
     clearcoat: 1,
-    clearcoatRoughness: 0.08,
+    clearcoatRoughness: 0.09,
     ior: 1.47,
-    specularIntensity: 0.96,
-    specularColor: new THREE.Color('#f4f8ff'),
-    envMapIntensity: 1.42,
+    specularIntensity: 0.82,
+    specularColor: new THREE.Color('#d4e9fb'),
+    envMapIntensity: 1.18,
     transparent: true,
     opacity: 0,
     depthWrite: true,
+    depthTest: true,
   }), []);
 
-  const ribGeometry = useMemo(() => new THREE.BoxGeometry(0.052, 0.55, 0.13), []);
+  const ribGeometry = useMemo(() => new THREE.BoxGeometry(0.05, 0.55, 0.125), []);
 
   useEffect(() => {
     const mesh = ribsRef.current;
@@ -96,46 +98,48 @@ function CapModel({ progressRef }) {
     if (!group) return;
 
     const p = progressRef.current;
-    const reveal = range(p, 0.62, 0.9);
-    const settle = range(p, 0.78, 0.94);
+    // Product starts appearing only after the material is already compressed.
+    // It reaches a fully opaque, clean state before the sticky section ends.
+    const reveal = range(p, 0.63, 0.87);
+    const lock = range(p, 0.86, 0.94);
 
-    shellMaterial.opacity = reveal * 0.97;
-    edgeMaterial.opacity = reveal * 0.98;
-    shellMaterial.emissiveIntensity = 0.05 + (1 - reveal) * 0.08;
-    edgeMaterial.emissiveIntensity = 0.08 + (1 - reveal) * 0.1;
+    shellMaterial.opacity = reveal;
+    edgeMaterial.opacity = reveal;
+    shellMaterial.emissiveIntensity = 0.02 + (1 - reveal) * 0.045;
+    edgeMaterial.emissiveIntensity = 0.035 + (1 - reveal) * 0.06;
 
-    group.position.y = THREE.MathUtils.damp(group.position.y, (1 - reveal) * 0.3, 4.6, delta);
-    group.scale.x = THREE.MathUtils.damp(group.scale.x, 0.93 + reveal * 0.07, 4.2, delta);
-    group.scale.z = THREE.MathUtils.damp(group.scale.z, 0.93 + reveal * 0.07, 4.2, delta);
-    group.scale.y = THREE.MathUtils.damp(group.scale.y, 0.4 + reveal * 0.6, 4.4, delta);
-    group.rotation.y = p * 0.34 + clock.getElapsedTime() * (0.01 - settle * 0.005);
-    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, (1 - reveal) * -0.012, 3.2, delta);
+    group.position.y = THREE.MathUtils.damp(group.position.y, (1 - reveal) * 0.28, 4.8, delta);
+    group.scale.x = THREE.MathUtils.damp(group.scale.x, 0.93 + reveal * 0.07, 4.5, delta);
+    group.scale.z = THREE.MathUtils.damp(group.scale.z, 0.93 + reveal * 0.07, 4.5, delta);
+    group.scale.y = THREE.MathUtils.damp(group.scale.y, 0.38 + reveal * 0.62, 4.7, delta);
+    group.rotation.y = p * 0.25 + clock.getElapsedTime() * (0.009 - lock * 0.006);
+    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, (1 - reveal) * -0.01, 3.2, delta);
   });
 
   return (
     <group ref={groupRef}>
       <mesh material={shellMaterial}>
-        <cylinderGeometry args={[2.47, 2.47, 0.72, 80, 1, false]} />
+        <cylinderGeometry args={[2.47, 2.47, 0.72, 88, 1, false]} />
       </mesh>
 
       <mesh position={[0, 0.385, 0]} material={shellMaterial}>
-        <cylinderGeometry args={[2.39, 2.44, 0.15, 80, 1, false]} />
+        <cylinderGeometry args={[2.39, 2.44, 0.15, 88, 1, false]} />
       </mesh>
 
       <mesh position={[0, 0.485, 0]} rotation={[Math.PI / 2, 0, 0]} material={edgeMaterial}>
-        <torusGeometry args={[2.34, 0.085, 12, 80]} />
+        <torusGeometry args={[2.34, 0.085, 12, 88]} />
       </mesh>
 
       <mesh position={[0, 0.497, 0]} rotation={[Math.PI / 2, 0, 0]} material={edgeMaterial}>
-        <torusGeometry args={[1.98, 0.026, 8, 80]} />
+        <torusGeometry args={[1.98, 0.026, 8, 88]} />
       </mesh>
 
       <mesh position={[0, 0.505, 0]} rotation={[-Math.PI / 2, 0, 0]} material={shellMaterial}>
-        <circleGeometry args={[2.28, 80]} />
+        <circleGeometry args={[2.28, 88]} />
       </mesh>
 
       <mesh position={[0, -0.395, 0]} rotation={[Math.PI / 2, 0, 0]} material={edgeMaterial}>
-        <torusGeometry args={[2.42, 0.06, 10, 80]} />
+        <torusGeometry args={[2.42, 0.06, 10, 88]} />
       </mesh>
 
       <instancedMesh ref={ribsRef} args={[ribGeometry, edgeMaterial, 112]} frustumCulled={false} />
@@ -146,7 +150,7 @@ function CapModel({ progressRef }) {
 function BackgroundDust() {
   const geometry = useMemo(() => {
     const random = seededRandom(222);
-    const count = typeof window !== 'undefined' && window.innerWidth < 680 ? 100 : 180;
+    const count = typeof window !== 'undefined' && window.innerWidth < 680 ? 90 : 150;
     const positions = new Float32Array(count * 3);
 
     for (let i = 0; i < count; i += 1) {
@@ -165,7 +169,7 @@ function BackgroundDust() {
 
   return (
     <points geometry={geometry}>
-      <pointsMaterial color="#446b97" size={0.012} transparent opacity={0.12} depthWrite={false} />
+      <pointsMaterial color="#3d658f" size={0.011} transparent opacity={0.1} depthWrite={false} />
     </points>
   );
 }
@@ -176,13 +180,13 @@ function CameraRig({ progressRef }) {
 
   useFrame((_, delta) => {
     const p = progressRef.current;
-    const gathering = range(p, 0.1, 0.3) * (1 - range(p, 0.45, 0.58));
-    const swirl = range(p, 0.3, 0.52) * (1 - range(p, 0.72, 0.86));
-    const product = range(p, 0.62, 0.9);
+    const braid = range(p, 0.17, 0.36) * (1 - range(p, 0.54, 0.68));
+    const preform = range(p, 0.48, 0.66) * (1 - range(p, 0.76, 0.88));
+    const product = range(p, 0.63, 0.88);
 
-    const targetX = pointer.x * 0.13;
-    const targetY = 3.1 + pointer.y * 0.08 - product * 0.24 + gathering * 0.04;
-    const targetZ = 11.3 - product * 0.72 + swirl * 0.08;
+    const targetX = pointer.x * 0.12;
+    const targetY = 3.1 + pointer.y * 0.07 - product * 0.23 + braid * 0.04;
+    const targetZ = 11.25 - product * 0.64 + preform * 0.08;
 
     camera.position.x = THREE.MathUtils.damp(camera.position.x, targetX, 3.0, delta);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, targetY, 3.0, delta);
@@ -199,8 +203,8 @@ function PostFX() {
   return (
     <ErrorBoundary scope="postprocessing" silent fallback={null}>
       <EffectComposer multisampling={0}>
-        <Bloom intensity={0.5} luminanceThreshold={0.7} luminanceSmoothing={0.88} mipmapBlur />
-        <Vignette eskil={false} offset={0.14} darkness={0.58} />
+        <Bloom intensity={0.36} luminanceThreshold={0.76} luminanceSmoothing={0.9} mipmapBlur />
+        <Vignette eskil={false} offset={0.14} darkness={0.56} />
       </EffectComposer>
     </ErrorBoundary>
   );
