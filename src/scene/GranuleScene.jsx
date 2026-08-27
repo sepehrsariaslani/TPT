@@ -1,6 +1,7 @@
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import ErrorBoundary from '../ErrorBoundary.jsx';
 import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
@@ -548,6 +549,29 @@ function CameraRig({ progressRef }) {
   return null;
 }
 
+/**
+ * پس‌پردازش در مرز خودش ایزوله شده است:
+ * اگر روی سخت‌افزار/مرورگر کاربر ساخته نشود، صحنه بدون بلوم رندر می‌شود
+ * به‌جای اینکه کل صفحه از کار بیفتد.
+ */
+function PostFX() {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <ErrorBoundary
+      scope="postprocessing"
+      silent
+      fallback={null}
+      onError={() => setFailed(true)}
+    >
+      <EffectComposer multisampling={0}>
+        <Bloom intensity={1.35} luminanceThreshold={0.22} luminanceSmoothing={0.66} mipmapBlur />
+        <Vignette eskil={false} offset={0.12} darkness={0.82} />
+      </EffectComposer>
+    </ErrorBoundary>
+  );
+}
+
 export default function GranuleScene({ progressRef }) {
   return (
     <>
@@ -567,10 +591,7 @@ export default function GranuleScene({ progressRef }) {
       <CapModel progressRef={progressRef} />
       <CameraRig progressRef={progressRef} />
 
-      <EffectComposer multisampling={0}>
-        <Bloom intensity={1.35} luminanceThreshold={0.22} luminanceSmoothing={0.66} mipmapBlur />
-        <Vignette eskil={false} offset={0.12} darkness={0.82} />
-      </EffectComposer>
+      <PostFX />
     </>
   );
 }

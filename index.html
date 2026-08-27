@@ -6,6 +6,34 @@
     <meta name="theme-color" content="#020713" />
     <meta name="description" content="TPT — تجربه تعاملی تزریق پلاستیک از گرانول تا محصول نهایی" />
     <title>TPT — Granule to Product</title>
+    <script>
+      // گزارش خطاهای مرورگر به لاگ سرور (فقط برای دیباگ محیط توسعه)
+      (function () {
+        var send = function (payload) {
+          try {
+            fetch('/__client-log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              keepalive: true
+            }).catch(function () {});
+          } catch (e) {}
+        };
+        send({ type: 'boot', ua: navigator.userAgent, url: location.href });
+        window.addEventListener('error', function (e) {
+          send({ type: 'window-error', message: e.message, source: e.filename + ':' + e.lineno });
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          send({ type: 'unhandled-rejection', message: String((e.reason && e.reason.message) || e.reason) });
+        });
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            send({ type: 'mounted', hasContent: !!(root && root.childElementCount), canvases: document.querySelectorAll('canvas').length });
+          }, 2500);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

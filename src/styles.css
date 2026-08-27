@@ -769,3 +769,22 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- پیام خطای زمان اجرا (به‌جای صفحه سفید) ---------- */
+.runtime-error {
+  position: absolute;
+  inset: auto 50% 12%;
+  transform: translateX(50%);
+  width: min(560px, 86vw);
+  padding: 22px 26px;
+  border: 1px solid rgba(120, 170, 255, 0.28);
+  border-radius: 18px;
+  background: rgba(4, 10, 24, 0.86);
+  backdrop-filter: blur(12px);
+  color: #dbe7ff;
+  text-align: center;
+  z-index: 5;
+}
+.runtime-error strong { display: block; font-size: 1rem; margin-bottom: 8px; }
+.runtime-error p { font-size: 0.86rem; color: #9fb6dd; word-break: break-word; margin-bottom: 8px; }
+.runtime-error small { font-size: 0.74rem; color: #6f86ab; line-height: 1.9; }

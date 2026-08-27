@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import GranuleScene from './scene/GranuleScene.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const smooth = (t) => {
@@ -106,15 +107,27 @@ export default function App() {
         <section ref={experienceRef} className="experience" id="experience">
           <div className="experience__sticky">
             <div className="canvas-shell" aria-hidden="true">
-              <Canvas
-                dpr={[1, 1.65]}
-                camera={{ position: [0, 2.7, 10.7], fov: 38, near: 0.1, far: 80 }}
-                gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-              >
-                <Suspense fallback={null}>
-                  <GranuleScene progressRef={progressRef} />
-                </Suspense>
-              </Canvas>
+              <ErrorBoundary scope="canvas">
+                <Canvas
+                  dpr={[1, 1.65]}
+                  camera={{ position: [0, 2.7, 10.7], fov: 38, near: 0.1, far: 80 }}
+                  gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+                  onCreated={({ gl }) => {
+                    window.__tptWebgl = gl.getContext()?.getParameter?.(0x1f01) || 'webgl-ok';
+                    try {
+                      fetch('/__client-log', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'webgl-ready', renderer: window.__tptWebgl }),
+                      }).catch(() => {});
+                    } catch (e) { /* noop */ }
+                  }}
+                >
+                  <Suspense fallback={null}>
+                    <GranuleScene progressRef={progressRef} />
+                  </Suspense>
+                </Canvas>
+              </ErrorBoundary>
             </div>
 
             <div className="screen-noise" />
