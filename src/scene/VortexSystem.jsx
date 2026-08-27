@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const TAU = Math.PI * 2;
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
@@ -21,243 +22,287 @@ function seededRandom(seed = 1337) {
   };
 }
 
-function makeFallCurve(index, amount, random) {
+function qualityScale() {
+  if (typeof window === 'undefined') return 0.85;
+  const cores = navigator.hardwareConcurrency || 6;
+  if (window.innerWidth < 680) return cores <= 4 ? 0.52 : 0.65;
+  if (window.innerWidth < 1100) return 0.78;
+  return cores <= 4 ? 0.82 : 1;
+}
+
+function makeCurve(kind, index, amount, random) {
   const points = [];
-  const base = (index / amount) * TAU + (random() - 0.5) * 0.18;
-  const lean = (random() - 0.5) * 0.22;
+  const base = (index / amount) * TAU + (random() - 0.5) * 0.16;
+  const steps = kind === 'storm' || kind === 'inner' ? 88 : 70;
 
-  for (let step = 0; step <= 110; step += 1) {
-    const t = step / 110;
-    const radius = 1.0
-      + (1 - t) * (3.0 + random() * 0.18)
-      + Math.sin(t * Math.PI) * 0.52;
-    const angle = base
-      + Math.sin(t * Math.PI * 1.58 + index * 0.61) * 0.18
-      + lean * t;
-    const micro = Math.sin(t * TAU * 3.2 + index) * 0.035;
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps;
 
-    points.push(new THREE.Vector3(
-      Math.cos(angle) * (radius + micro),
-      9.0 - t * 17.2,
-      Math.sin(angle) * (radius + micro) * 0.72,
-    ));
+    if (kind === 'fall') {
+      const drift = Math.sin(t * Math.PI * 1.7 + index * 0.53) * 0.18;
+      const r = 0.35 + (index % 5) * 0.22 + Math.sin(t * TAU * 2.1 + index) * 0.035;
+      const angle = base + drift;
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * r,
+        9.2 - t * 17.4,
+        Math.sin(angle) * r * 0.76,
+      ));
+    } else if (kind === 'orbit') {
+      const band = index % 8;
+      const radius = 1.15 + band * 0.43 + Math.sin(t * TAU * 2.0 + index) * 0.055;
+      const angle = base + t * TAU * (1.85 + (band % 3) * 0.18);
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * radius,
+        0.64 + (band - 3.5) * 0.055 + Math.sin(t * TAU * 2.0 + index) * 0.045,
+        Math.sin(angle) * radius * 0.74,
+      ));
+    } else if (kind === 'form') {
+      const radius = 2.85 - t * 0.44 + Math.sin(t * TAU * 2.7 + index) * 0.06;
+      const angle = base + t * TAU * (3.45 + (index % 3) * 0.16);
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * radius,
+        1.02 - t * 1.85,
+        Math.sin(angle) * radius * 0.82,
+      ));
+    } else {
+      const inner = kind === 'inner';
+      const turns = inner ? 6.7 + (index % 3) * 0.2 : 5.55 + (index % 4) * 0.18;
+      const angle = base + t * TAU * turns;
+      const pinch = Math.exp(-Math.pow((t - 0.62) / 0.22, 2));
+      const radius = inner
+        ? 2.25 - t * 1.45 + Math.sin(t * TAU * 3.0 + index) * 0.07
+        : 4.62 - t * 3.55 - pinch * 0.14
+          + Math.sin(t * TAU * 2.45 + index) * 0.11;
+      points.push(new THREE.Vector3(
+        Math.cos(angle) * radius,
+        5.3 - t * 9.25,
+        Math.sin(angle) * radius * (inner ? 0.88 : 0.82),
+      ));
+    }
   }
 
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.28);
+  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.25);
 }
 
-function makeVortexCurve(index, amount, random, inner = false) {
-  const points = [];
-  const base = (index / amount) * TAU + (random() - 0.5) * 0.15;
-  const turns = inner ? 6.8 + random() * 0.7 : 5.55 + random() * 0.8;
-  const wobblePhase = random() * TAU;
-
-  for (let step = 0; step <= 140; step += 1) {
-    const t = step / 140;
-    const angle = base + t * TAU * turns;
-    const middlePinch = Math.exp(-Math.pow((t - 0.56) / 0.22, 2));
-    const radius = inner
-      ? 2.0 - t * 0.62 + Math.sin(t * TAU * 3.6 + wobblePhase) * 0.08
-      : 4.58 - t * 1.82 - middlePinch * 0.18
-        + Math.sin(t * TAU * 2.35 + wobblePhase) * 0.13
-        + Math.sin(t * TAU * 7.1 + index) * 0.035;
-
-    points.push(new THREE.Vector3(
-      Math.cos(angle) * radius,
-      5.75 - t * 10.35,
-      Math.sin(angle) * radius * (inner ? 0.87 : 0.82),
-    ));
-  }
-
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.24);
-}
-
-function makeReleaseCurve(index, amount, random) {
-  const points = [];
-  const base = (index / amount) * TAU + (random() - 0.5) * 0.2;
-  const turns = 5.4 + random() * 1.2;
-
-  for (let step = 0; step <= 120; step += 1) {
-    const t = step / 120;
-    const angle = base + t * TAU * turns;
-    const radius = 2.55 + t * 2.7 + Math.sin(t * TAU * 3.4 + index) * 0.11;
-
-    points.push(new THREE.Vector3(
-      Math.cos(angle) * radius,
-      1.65 - t * 8.2,
-      Math.sin(angle) * radius * 0.83,
-    ));
-  }
-
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.26);
-}
-
-function buildBundle({ kind, amount, seed, inner = false }) {
-  const random = seededRandom(seed);
-  const bundle = [];
-
-  for (let index = 0; index < amount; index += 1) {
-    const curve = kind === 'fall'
-      ? makeFallCurve(index, amount, random)
-      : kind === 'release'
-        ? makeReleaseCurve(index, amount, random)
-        : makeVortexCurve(index, amount, random, inner);
-
-    const coreRadius = inner
-      ? 0.008 + random() * 0.004
-      : kind === 'fall'
-        ? 0.007 + random() * 0.003
-        : 0.009 + random() * 0.004;
-
-    const haloRadius = coreRadius * (inner ? 3.1 : 3.7);
-    const veilRadius = coreRadius * (inner ? 5.3 : 6.4);
-
-    bundle.push({
-      core: new THREE.TubeGeometry(curve, 150, coreRadius, 5, false),
-      halo: new THREE.TubeGeometry(curve, 150, haloRadius, 5, false),
-      veil: new THREE.TubeGeometry(curve, 150, veilRadius, 4, false),
-      phase: random() * TAU,
-      speed: 0.7 + random() * 0.75,
-      brightness: 0.65 + random() * 0.55,
-    });
-  }
-
-  return bundle;
-}
-
-function FilamentBundle({ bundle, materials, prefix }) {
-  return bundle.map((item, index) => (
-    <group key={`${prefix}-${index}`}>
-      <mesh geometry={item.veil} material={materials.veil} />
-      <mesh geometry={item.halo} material={materials.halo} />
-      <mesh geometry={item.core} material={materials.core} />
-    </group>
+function mergeTubeLayer(curves, radius, tubularSegments, radialSegments) {
+  const parts = curves.map((curve) => new THREE.TubeGeometry(
+    curve,
+    tubularSegments,
+    radius,
+    radialSegments,
+    false,
   ));
+  const merged = mergeGeometries(parts, false);
+  parts.forEach((part) => part.dispose());
+  return merged;
 }
 
-function makeMaterials(coreColor, haloColor) {
-  const core = new THREE.MeshBasicMaterial({
-    color: coreColor,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  const halo = new THREE.MeshBasicMaterial({
-    color: haloColor,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  const veil = new THREE.MeshBasicMaterial({
-    color: '#1f55c8',
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
+function buildBundle(kind, amount, seed, scale = 1) {
+  const random = seededRandom(seed);
+  const count = Math.max(3, Math.round(amount * scale));
+  const curves = [];
+  for (let index = 0; index < count; index += 1) {
+    curves.push(makeCurve(kind, index, count, random));
+  }
+
+  const baseRadius = kind === 'fall' ? 0.008 : kind === 'orbit' ? 0.009 : kind === 'form' ? 0.01 : 0.011;
+  const core = mergeTubeLayer(curves, baseRadius, kind === 'storm' || kind === 'inner' ? 84 : 68, 4);
+  const halo = mergeTubeLayer(curves, baseRadius * 3.8, kind === 'storm' || kind === 'inner' ? 58 : 48, 3);
+  const veil = mergeTubeLayer(curves, baseRadius * 7.2, kind === 'storm' || kind === 'inner' ? 42 : 36, 3);
 
   return { core, halo, veil };
 }
 
-/**
- * Layered filament system for the storm/vortex transition.
- * Every visible line is actually three nested tubes: sharp core, soft halo and
- * a much wider faint veil. That lets post-processing bloom feel optical rather
- * than like a single neon wire.
- */
-export default function VortexSystem({ progressRef }) {
-  const fallRef = useRef();
-  const stormRef = useRef();
-  const innerRef = useRef();
-  const releaseRef = useRef();
+function makeMaterials(coreColor, haloColor, veilColor = '#1d55cb') {
+  return {
+    core: new THREE.MeshBasicMaterial({
+      color: coreColor,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    halo: new THREE.MeshBasicMaterial({
+      color: haloColor,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    veil: new THREE.MeshBasicMaterial({
+      color: veilColor,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  };
+}
 
-  const fallBundle = useMemo(() => buildBundle({ kind: 'fall', amount: 22, seed: 41 }), []);
-  const stormBundle = useMemo(() => buildBundle({ kind: 'vortex', amount: 24, seed: 82 }), []);
-  const innerBundle = useMemo(() => buildBundle({ kind: 'vortex', amount: 10, seed: 128, inner: true }), []);
-  const releaseBundle = useMemo(() => buildBundle({ kind: 'release', amount: 18, seed: 208 }), []);
+function Bundle({ geometry, materials }) {
+  return (
+    <>
+      <mesh geometry={geometry.veil} material={materials.veil} />
+      <mesh geometry={geometry.halo} material={materials.halo} />
+      <mesh geometry={geometry.core} material={materials.core} />
+    </>
+  );
+}
 
-  const fallMaterials = useMemo(() => makeMaterials('#7eb8ff', '#347eff'), []);
-  const stormMaterials = useMemo(() => makeMaterials('#9dccff', '#4a8fff'), []);
-  const innerMaterials = useMemo(() => makeMaterials('#c1e1ff', '#5da4ff'), []);
-  const releaseMaterials = useMemo(() => makeMaterials('#89c0ff', '#377eff'), []);
+function StormSparks({ progressRef }) {
+  const ref = useRef();
+  const geometry = useMemo(() => {
+    const random = seededRandom(4401);
+    const count = typeof window !== 'undefined' && window.innerWidth < 680 ? 320 : 620;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const color = new THREE.Color();
+
+    for (let i = 0; i < count; i += 1) {
+      const t = random();
+      const angle = random() * TAU + t * TAU * 5.6;
+      const radius = 4.5 - t * 3.45 + (random() - 0.5) * 0.5;
+      const i3 = i * 3;
+      positions[i3] = Math.cos(angle) * radius;
+      positions[i3 + 1] = 5.25 - t * 9.15 + (random() - 0.5) * 0.5;
+      positions[i3 + 2] = Math.sin(angle) * radius * 0.82;
+      color.set(random() > 0.8 ? '#b9dcff' : '#4b94ff');
+      colors[i3] = color.r;
+      colors[i3 + 1] = color.g;
+      colors[i3 + 2] = color.b;
+    }
+
+    const next = new THREE.BufferGeometry();
+    next.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    next.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return next;
+  }, []);
+
+  const material = useMemo(() => new THREE.PointsMaterial({
+    size: 0.032,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  }), []);
 
   useEffect(() => () => {
-    [fallBundle, stormBundle, innerBundle, releaseBundle].flat().forEach((item) => {
-      item.core.dispose();
-      item.halo.dispose();
-      item.veil.dispose();
+    geometry.dispose();
+    material.dispose();
+  }, [geometry, material]);
+
+  useFrame(({ clock }) => {
+    const p = progressRef.current;
+    const visibility = range(p, 0.25, 0.39) * (1 - range(p, 0.66, 0.8));
+    material.opacity = visibility * 0.72;
+    if (ref.current) {
+      ref.current.rotation.y = clock.getElapsedTime() * 0.085 + p * 0.7;
+    }
+  });
+
+  return <points ref={ref} geometry={geometry} material={material} />;
+}
+
+export default function VortexSystem({ progressRef }) {
+  const fallRef = useRef();
+  const orbitRef = useRef();
+  const stormRef = useRef();
+  const innerRef = useRef();
+  const formRef = useRef();
+  const scale = useMemo(qualityScale, []);
+
+  const fallGeometry = useMemo(() => buildBundle('fall', 18, 41, scale), [scale]);
+  const orbitGeometry = useMemo(() => buildBundle('orbit', 14, 81, scale), [scale]);
+  const stormGeometry = useMemo(() => buildBundle('storm', 18, 121, scale), [scale]);
+  const innerGeometry = useMemo(() => buildBundle('inner', 8, 161, scale), [scale]);
+  const formGeometry = useMemo(() => buildBundle('form', 11, 201, scale), [scale]);
+
+  const fallMaterials = useMemo(() => makeMaterials('#9bcaff', '#3e82ff', '#174ba7'), []);
+  const orbitMaterials = useMemo(() => makeMaterials('#a8d2ff', '#4b96ff', '#1c5ac9'), []);
+  const stormMaterials = useMemo(() => makeMaterials('#c0e0ff', '#5ea7ff', '#245fd4'), []);
+  const innerMaterials = useMemo(() => makeMaterials('#d9ecff', '#7bbaff', '#2a68da'), []);
+  const formMaterials = useMemo(() => makeMaterials('#c9e5ff', '#5da6ff', '#235fd2'), []);
+
+  useEffect(() => () => {
+    [fallGeometry, orbitGeometry, stormGeometry, innerGeometry, formGeometry].forEach((bundle) => {
+      bundle.core?.dispose();
+      bundle.halo?.dispose();
+      bundle.veil?.dispose();
     });
-    [fallMaterials, stormMaterials, innerMaterials, releaseMaterials].forEach((set) => {
+    [fallMaterials, orbitMaterials, stormMaterials, innerMaterials, formMaterials].forEach((set) => {
       set.core.dispose();
       set.halo.dispose();
       set.veil.dispose();
     });
-  }, [fallBundle, fallMaterials, innerBundle, innerMaterials, releaseBundle, releaseMaterials, stormBundle, stormMaterials]);
+  }, [fallGeometry, fallMaterials, formGeometry, formMaterials, innerGeometry, innerMaterials, orbitGeometry, orbitMaterials, stormGeometry, stormMaterials]);
 
   useFrame(({ clock }) => {
     const p = progressRef.current;
     const time = clock.getElapsedTime();
 
-    const fallVisibility = 1 - range(p, 0.12, 0.31);
-    const stormIn = range(p, 0.11, 0.26);
-    const stormOut = range(p, 0.54, 0.7);
-    const stormVisibility = stormIn * (1 - stormOut);
-    const innerVisibility = range(p, 0.21, 0.35) * (1 - range(p, 0.53, 0.67));
-    const releaseVisibility = range(p, 0.665, 0.78) * (1 - range(p, 0.9, 1.0));
+    const fall = 1 - range(p, 0.14, 0.31);
+    const orbit = range(p, 0.1, 0.23) * (1 - range(p, 0.34, 0.49));
+    const storm = range(p, 0.28, 0.4) * (1 - range(p, 0.59, 0.76));
+    const inner = range(p, 0.34, 0.45) * (1 - range(p, 0.61, 0.75));
+    const form = range(p, 0.51, 0.62) * (1 - range(p, 0.75, 0.9));
 
-    fallMaterials.core.opacity = fallVisibility * 0.24;
-    fallMaterials.halo.opacity = fallVisibility * 0.075;
-    fallMaterials.veil.opacity = fallVisibility * 0.018;
+    fallMaterials.core.opacity = fall * 0.26;
+    fallMaterials.halo.opacity = fall * 0.09;
+    fallMaterials.veil.opacity = fall * 0.025;
 
-    stormMaterials.core.opacity = stormVisibility * 0.36;
-    stormMaterials.halo.opacity = stormVisibility * 0.12;
-    stormMaterials.veil.opacity = stormVisibility * 0.026;
+    orbitMaterials.core.opacity = orbit * 0.38;
+    orbitMaterials.halo.opacity = orbit * 0.15;
+    orbitMaterials.veil.opacity = orbit * 0.052;
 
-    innerMaterials.core.opacity = innerVisibility * 0.42;
-    innerMaterials.halo.opacity = innerVisibility * 0.14;
-    innerMaterials.veil.opacity = innerVisibility * 0.03;
+    stormMaterials.core.opacity = storm * 0.48;
+    stormMaterials.halo.opacity = storm * 0.19;
+    stormMaterials.veil.opacity = storm * 0.064;
 
-    releaseMaterials.core.opacity = releaseVisibility * 0.3;
-    releaseMaterials.halo.opacity = releaseVisibility * 0.095;
-    releaseMaterials.veil.opacity = releaseVisibility * 0.022;
+    innerMaterials.core.opacity = inner * 0.56;
+    innerMaterials.halo.opacity = inner * 0.22;
+    innerMaterials.veil.opacity = inner * 0.072;
+
+    formMaterials.core.opacity = form * 0.44;
+    formMaterials.halo.opacity = form * 0.18;
+    formMaterials.veil.opacity = form * 0.055;
 
     if (fallRef.current) {
-      fallRef.current.rotation.y = time * 0.012 + p * 0.12;
-      fallRef.current.rotation.z = Math.sin(time * 0.17) * 0.006;
+      fallRef.current.rotation.y = time * 0.012;
+      fallRef.current.position.y = -((time * 0.16) % 0.32) * fall;
+    }
+    if (orbitRef.current) {
+      orbitRef.current.rotation.y = time * 0.11 + p * 0.6;
+      orbitRef.current.rotation.z = Math.sin(time * 0.2) * 0.01;
     }
     if (stormRef.current) {
-      stormRef.current.rotation.y = time * 0.048 + p * 0.92;
-      stormRef.current.rotation.z = Math.sin(time * 0.24) * 0.008;
-      stormRef.current.scale.setScalar(0.985 + Math.sin(time * 0.16) * 0.01);
+      stormRef.current.rotation.y = time * 0.065 + p * 0.95;
+      stormRef.current.rotation.z = Math.sin(time * 0.19) * 0.012;
+      stormRef.current.scale.setScalar(0.99 + Math.sin(time * 0.16) * 0.012);
     }
     if (innerRef.current) {
-      innerRef.current.rotation.y = -time * 0.072 + p * 1.22;
-      innerRef.current.scale.setScalar(0.96 + innerVisibility * 0.04);
+      innerRef.current.rotation.y = -time * 0.09 + p * 1.18;
+      innerRef.current.scale.setScalar(0.96 + inner * 0.045);
     }
-    if (releaseRef.current) {
-      releaseRef.current.rotation.y = -time * 0.035 + p * 0.68;
+    if (formRef.current) {
+      formRef.current.rotation.y = time * 0.045 + p * 0.52;
+      formRef.current.scale.setScalar(0.96 + form * 0.035);
     }
   });
 
   return (
     <>
-      <group ref={fallRef}>
-        <FilamentBundle bundle={fallBundle} materials={fallMaterials} prefix="fall" />
-      </group>
-      <group ref={stormRef}>
-        <FilamentBundle bundle={stormBundle} materials={stormMaterials} prefix="storm" />
-      </group>
-      <group ref={innerRef}>
-        <FilamentBundle bundle={innerBundle} materials={innerMaterials} prefix="inner" />
-      </group>
-      <group ref={releaseRef}>
-        <FilamentBundle bundle={releaseBundle} materials={releaseMaterials} prefix="release" />
-      </group>
+      <group ref={fallRef}><Bundle geometry={fallGeometry} materials={fallMaterials} /></group>
+      <group ref={orbitRef}><Bundle geometry={orbitGeometry} materials={orbitMaterials} /></group>
+      <group ref={stormRef}><Bundle geometry={stormGeometry} materials={stormMaterials} /></group>
+      <group ref={innerRef}><Bundle geometry={innerGeometry} materials={innerMaterials} /></group>
+      <group ref={formRef}><Bundle geometry={formGeometry} materials={formMaterials} /></group>
+      <StormSparks progressRef={progressRef} />
     </>
   );
 }
