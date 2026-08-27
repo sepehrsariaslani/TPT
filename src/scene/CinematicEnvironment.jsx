@@ -39,12 +39,12 @@ export default function CinematicEnvironment({ progressRef }) {
 
     const room = new RoomEnvironment();
     const pmrem = new THREE.PMREMGenerator(gl);
-    const target = pmrem.fromScene(room, 0.055);
+    const target = pmrem.fromScene(room, 0.065);
 
     scene.environment = target.texture;
-    scene.environmentIntensity = 0.74;
+    scene.environmentIntensity = 0.58;
     gl.toneMapping = THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = 0.96;
+    gl.toneMappingExposure = 0.9;
     gl.outputColorSpace = THREE.SRGBColorSpace;
     gl.shadowMap.enabled = false;
 
@@ -63,56 +63,61 @@ export default function CinematicEnvironment({ progressRef }) {
   useFrame(({ clock }) => {
     const p = progressRef.current;
     if (rigRef.current) {
-      rigRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.065) * 0.012 + p * 0.016;
+      rigRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.052) * 0.009 + p * 0.01;
     }
-    scene.environmentIntensity = 0.72 + Math.sin(Math.min(1, p) * Math.PI) * 0.08;
+    scene.environmentIntensity = 0.56 + Math.sin(Math.min(1, p) * Math.PI) * 0.055;
   });
 
   return (
     <group ref={rigRef}>
-      <hemisphereLight intensity={0.24} color="#b9d8ff" groundColor="#01040a" />
-      <ambientLight intensity={0.04} color="#31557f" />
+      <hemisphereLight intensity={0.17} color="#d8e5f3" groundColor="#010309" />
+      <ambientLight intensity={0.022} color="#274566" />
 
+      {/* Large neutral studio key: broad highlight, not a neon glow. */}
       <AreaLight
-        position={[3.8, 7.4, 6.4]}
-        target={[0, 0.6, 0]}
-        color="#d8ecff"
-        intensity={10.5}
-        width={5.8}
-        height={8.0}
-      />
-      <AreaLight
-        position={[-5.6, 2.4, 4.4]}
-        target={[0, 0.15, 0]}
-        color="#4f91e8"
+        position={[4.8, 7.8, 6.7]}
+        target={[0, 0.4, 0]}
+        color="#edf5ff"
         intensity={7.2}
-        width={4.4}
-        height={6.8}
+        width={6.8}
+        height={8.6}
       />
+
+      {/* Cool fill preserves the TPT blue identity without turning the resin chrome. */}
       <AreaLight
-        position={[0.2, 4.8, -5.8]}
-        target={[0, 0.35, 0]}
-        color="#2e6ed2"
-        intensity={8.2}
-        width={5.0}
-        height={4.4}
+        position={[-5.7, 2.8, 4.6]}
+        target={[0, 0.05, 0]}
+        color="#6c9bd2"
+        intensity={3.6}
+        width={5.2}
+        height={7.2}
+      />
+
+      {/* Thin rear strip produces realistic edge separation on the finished cap. */}
+      <AreaLight
+        position={[0.4, 4.5, -5.9]}
+        target={[0, 0.25, 0]}
+        color="#477fc5"
+        intensity={4.3}
+        width={5.6}
+        height={3.6}
       />
 
       <spotLight
-        position={[1.8, 8.6, 6.6]}
-        intensity={6.5}
-        angle={0.38}
-        penumbra={0.98}
+        position={[2.0, 8.4, 6.3]}
+        intensity={3.4}
+        angle={0.42}
+        penumbra={1}
         distance={22}
         decay={2}
-        color="#dceeff"
+        color="#f1f7ff"
       />
       <pointLight
-        position={[0, -2.2, 1.8]}
-        intensity={4.0}
-        distance={9}
+        position={[0, -2.0, 1.6]}
+        intensity={1.35}
+        distance={8}
         decay={2}
-        color="#124fae"
+        color="#28598f"
       />
     </group>
   );
