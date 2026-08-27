@@ -53,7 +53,7 @@ function createMeltTexture(seed = 411, size = 64) {
 
 function buildBlobData(count) {
   const random = seededRandom(88421);
-  return Array.from({ length: count }, (_, index) => {
+  return Array.from({ length: count }, () => {
     const pick = random();
     const lane = pick < 0.37 ? -1 : pick < 0.74 ? 1 : 0;
     return {
@@ -69,7 +69,7 @@ function buildBlobData(count) {
   });
 }
 
-function resolvePoint(item, compact, time, visibility, position, tangent) {
+function resolvePoint(item, compact, time, visibility, position, tangent, nextPosition) {
   const driftT = (item.t + time * 0.0024 * item.speed * visibility) % 1;
   const t = clamp01(driftT * 0.94 + 0.03);
   const eps = 0.012;
@@ -98,9 +98,8 @@ function resolvePoint(item, compact, time, visibility, position, tangent) {
   };
 
   sample(t, position);
-  const next = new THREE.Vector3();
-  sample(Math.min(1, t + eps), next);
-  tangent.copy(next).sub(position).normalize();
+  sample(Math.min(1, t + eps), nextPosition);
+  tangent.copy(nextPosition).sub(position).normalize();
 }
 
 export default function PlasticizingMelt({ progressRef }) {
@@ -114,6 +113,7 @@ export default function PlasticizingMelt({ progressRef }) {
 
   const helper = useMemo(() => new THREE.Object3D(), []);
   const position = useMemo(() => new THREE.Vector3(), []);
+  const nextPosition = useMemo(() => new THREE.Vector3(), []);
   const tangent = useMemo(() => new THREE.Vector3(), []);
   const quaternion = useMemo(() => new THREE.Quaternion(), []);
   const baseAxis = useMemo(() => new THREE.Vector3(0, 1, 0), []);
@@ -218,7 +218,7 @@ export default function PlasticizingMelt({ progressRef }) {
       const item = blobData[i];
       const localSoft = range(p, 0.205 + item.delay, 0.295 + item.delay);
       const localMerge = range(p, 0.275 + item.delay * 0.5, 0.41 + item.delay * 0.35);
-      resolvePoint(item, compact, time, visibility, position, tangent);
+      resolvePoint(item, compact, time, visibility, position, tangent, nextPosition);
       quaternion.setFromUnitVectors(baseAxis, tangent);
 
       const sideFactor = item.lane === 0 ? 0.86 : 1;
@@ -271,7 +271,6 @@ export default function PlasticizingMelt({ progressRef }) {
     const gateScale = THREE.MathUtils.lerp(0.38, 0.72, delivery) * (1 - handoff * 0.45);
     gate.scale.set(gateScale, gateScale * 0.72, gateScale);
 
-    // Keep the material mass visually heavy. There is no looping or vortex turn.
     group.rotation.y = THREE.MathUtils.damp(
       group.rotation.y,
       Math.sin(time * 0.13) * 0.0035 * visibility,
