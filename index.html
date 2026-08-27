@@ -30,6 +30,7 @@
       <a href="#services">خدمات</a>
       <a href="#capacity">توانمندی‌ها</a>
       <a href="#industries">صنایع</a>
+      <a href="#products">محصولات</a>
       <a href="#gallery">گالری</a>
       <a href="#faq">سوالات</a>
     </nav>
@@ -194,6 +195,29 @@
   </div>
 </section>
 
+<!-- ============ PRODUCT CAROUSEL (3D) ============ -->
+<section class="section" id="products">
+  <div class="wrap">
+    <div class="head">
+      <span class="pill">محصولات</span>
+      <h2>محصولات را در سه‌بعد بچرخانید</h2>
+      <p>با درگ ماوس یا کشیدن انگشت، مدل را از هر زاویه ببینید. رنگ را هم می‌توانید عوض کنید — همان رنگ‌هایی که با مستربچ روی خط تولید اجرا می‌شوند.</p>
+    </div>
+    <div class="pcar">
+      <div class="pcar__stage">
+        <div id="product-3d" class="pcar__gl" role="img" aria-label="نمایش سه‌بعدی محصول"></div>
+        <span class="pcar__hint">برای چرخاندن بکشید</span>
+        <div id="product-colors" class="pcar__colors"></div>
+      </div>
+      <div class="pcar__side">
+        <div id="product-tabs" class="pcar__tabs"></div>
+        <div id="product-info" class="pcar__info"></div>
+        <a href="#contact" class="btn">استعلام قیمت این محصول</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ GALLERY ============ -->
 <section class="section section--alt" id="gallery">
   <div class="wrap">
@@ -300,6 +324,7 @@
 }
 </script>
 <script type="module" src="js/three-scene.js"></script>
+<script type="module" src="js/carousel.js"></script>
 <script nomodule src="js/scene-2d.js"></script>
 <script>
   /* اگر مرورگر importmap را پشتیبانی نکند، نسخه دوبعدی اجرا می‌شود */

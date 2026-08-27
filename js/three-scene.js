@@ -8,6 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildCap, buildPellet } from './cap-model.js';
 
 const host = document.getElementById('scene-3d');
@@ -81,7 +82,7 @@ const capMat = new THREE.MeshPhysicalMaterial({
   transparent: true, opacity: 0
 });
 
-const { body, ring, grooves, R: CAP_R, H: CAP_H } = buildCap(THREE, { radius: 1, height: 0.34 });
+const { body, ring, grooves } = buildCap(THREE, { radius: 1, height: 0.34 });
 const product = new THREE.Group();
 const bodyMesh = new THREE.Mesh(body, capMat);
 product.add(bodyMesh);
@@ -89,6 +90,45 @@ product.add(new THREE.Mesh(ring, capMat));
 grooves.forEach(g => product.add(new THREE.Mesh(g, capMat)));
 product.position.y = 0.02;
 stage.add(product);
+
+/* مرحله ۲ — اگر مدل واقعی موجود بود، جای مدل پروسیجرال می‌نشیند
+   کافی است فایل خروجی Blender/CAD را در assets/product.glb بگذارید. */
+const GLB_URL = 'assets/product.glb';
+async function tryRealModel() {
+  try {
+    const head = await fetch(GLB_URL, { method: 'HEAD' });
+    if (!head.ok) return;
+    const gltf = await new GLTFLoader().loadAsync(GLB_URL);
+    const root = gltf.scene;
+    // نرمال‌سازی: مرکز روی مبدا، بزرگ‌ترین بعد = ۲ واحد، کف روی y=0
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3(), center = new THREE.Vector3();
+    box.getSize(size); box.getCenter(center);
+    const k = 2 / Math.max(size.x, size.y, size.z);
+    root.scale.setScalar(k);
+    root.position.set(-center.x * k, -box.min.y * k, -center.z * k);
+    root.traverse(o => { if (o.isMesh) { o.material = capMat; o.castShadow = o.receiveShadow = true; } });
+
+    // بزرگ‌ترین مش برای نمونه‌برداری ذرات
+    let best = null, bestCount = 0;
+    root.updateWorldMatrix(true, true);
+    root.traverse(o => {
+      if (o.isMesh && o.geometry?.attributes?.position?.count > bestCount) {
+        bestCount = o.geometry.attributes.position.count; best = o;
+      }
+    });
+    if (!best) return;
+    const g = best.geometry.clone().applyMatrix4(best.matrixWorld);
+    rebuildTargets(new THREE.Mesh(g, capMat));
+
+    stage.remove(product);
+    root.position.y += 0.02;
+    stage.add(root);
+    console.info('[TPT] مدل واقعی GLB بارگذاری شد.');
+  } catch (e) {
+    console.info('[TPT] مدل GLB یافت نشد؛ مدل پروسیجرال استفاده می‌شود.');
+  }
+}
 
 /* ---------- pellets ---------- */
 const COUNT = innerWidth < 760 ? 1600 : 3600;
@@ -103,8 +143,8 @@ pellets.frustumCulled = false;
 stage.add(pellets);
 
 /* نمونه‌برداری از سطح مدل → مقصد هر گرانول */
-const sampler = new MeshSurfaceSampler(new THREE.Mesh(body, capMat)).build();
 const sPos = new THREE.Vector3(), sNor = new THREE.Vector3();
+let sampler = new MeshSurfaceSampler(new THREE.Mesh(body, capMat)).build();
 
 const P = [];
 for (let i = 0; i < COUNT; i++) {
@@ -124,6 +164,18 @@ for (let i = 0; i < COUNT; i++) {
     rs: rnd(.5, 1.6), sc: rnd(.7, 1.35)
   });
 }
+
+/* مقصد ذرات را از روی مش داده‌شده دوباره می‌سازد (برای مدل واقعی) */
+function rebuildTargets(mesh) {
+  sampler = new MeshSurfaceSampler(mesh).build();
+  for (let i = 0; i < COUNT; i++) {
+    sampler.sample(sPos, sNor);
+    P[i].tx = sPos.x + sNor.x * 0.012;
+    P[i].ty = sPos.y + 0.02 + sNor.y * 0.012;
+    P[i].tz = sPos.z + sNor.z * 0.012;
+  }
+}
+tryRealModel();
 
 const dummy = new THREE.Object3D();
 const vTmp = new THREE.Vector3();
