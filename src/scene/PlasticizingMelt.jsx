@@ -28,9 +28,9 @@ function createMeltTexture(seed = 411, size = 64) {
     for (let x = 0; x < size; x += 1) {
       const nx = x / size;
       const ny = y / size;
-      const broad = Math.sin(nx * TAU * 2.2 + ny * 2.4) * 1.5;
-      const streak = Math.sin(nx * TAU * 6.6 - ny * 4.1) * 0.65;
-      const grain = (random() - 0.5) * 2.7;
+      const broad = Math.sin(nx * TAU * 2.2 + ny * 2.4) * 1.45;
+      const streak = Math.sin(nx * TAU * 6.2 - ny * 4.0) * 0.6;
+      const grain = (random() - 0.5) * 2.5;
       pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + streak + grain));
     }
   }
@@ -43,7 +43,7 @@ function createMeltTexture(seed = 411, size = 64) {
   );
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2.8, 4.1);
+  texture.repeat.set(2.6, 4.2);
   texture.colorSpace = THREE.NoColorSpace;
   texture.needsUpdate = true;
   return texture;
@@ -54,75 +54,143 @@ function buildBlobData(count) {
   return Array.from({ length: count }, () => ({
     t: random(),
     phase: random() * TAU,
-    radius: 0.15 + random() * 0.65,
+    radius: 0.2 + random() * 0.44,
     depth: (random() - 0.5) * 2,
-    scale: 0.78 + random() * 0.3,
-    delay: random() * 0.045,
-    speed: 0.84 + random() * 0.2,
+    scale: 0.76 + random() * 0.3,
+    delay: random() * 0.05,
   }));
+}
+
+function createScrewFlightGeometry(compact) {
+  const points = [];
+  const turns = 3.25;
+  const radius = compact ? 0.27 : 0.33;
+  for (let i = 0; i <= 96; i += 1) {
+    const t = i / 96;
+    const angle = t * TAU * turns;
+    const taper = THREE.MathUtils.lerp(1, 0.82, t);
+    points.push(new THREE.Vector3(
+      Math.cos(angle) * radius * taper,
+      THREE.MathUtils.lerp(2.62, 1.12, t),
+      Math.sin(angle) * radius * taper,
+    ));
+  }
+  const curve = new THREE.CatmullRomCurve3(points);
+  return new THREE.TubeGeometry(curve, 120, compact ? 0.024 : 0.029, 8, false);
+}
+
+function createShotGeometry() {
+  const profile = [
+    [0, -0.56],
+    [0.17, -0.55],
+    [0.29, -0.45],
+    [0.35, -0.24],
+    [0.36, 0.19],
+    [0.31, 0.42],
+    [0.18, 0.54],
+    [0, 0.56],
+  ].map(([radius, y]) => new THREE.Vector2(radius, y));
+  const geometry = new THREE.LatheGeometry(profile, 64);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export default function PlasticizingMelt({ progressRef }) {
   const { size } = useThree();
   const compact = size.width <= 680;
   const groupRef = useRef();
+  const barrelRef = useRef();
+  const screwRef = useRef();
   const blobsRef = useRef();
-  const massRef = useRef();
-  const neckRef = useRef();
-  const gateRef = useRef();
-  const lightRef = useRef();
+  const shotRef = useRef();
+  const heatLightRef = useRef();
 
   const helper = useMemo(() => new THREE.Object3D(), []);
   const meltTexture = useMemo(() => createMeltTexture(), []);
-  const blobData = useMemo(() => buildBlobData(compact ? 54 : 82), [compact]);
+  const blobData = useMemo(() => buildBlobData(compact ? 58 : 88), [compact]);
   const blobGeometry = useMemo(
-    () => new THREE.SphereGeometry(0.16, compact ? 12 : 16, compact ? 8 : 12),
+    () => new THREE.SphereGeometry(0.145, compact ? 12 : 16, compact ? 8 : 12),
     [compact],
   );
-  const massGeometry = useMemo(
-    () => new THREE.SphereGeometry(0.48, compact ? 18 : 26, compact ? 12 : 18),
-    [compact],
-  );
+  const screwFlightGeometry = useMemo(() => createScrewFlightGeometry(compact), [compact]);
+  const shotGeometry = useMemo(() => createShotGeometry(), []);
 
   const coolColor = useMemo(() => new THREE.Color('#245f9f'), []);
-  const softColor = useMemo(() => new THREE.Color('#2165aa'), []);
-  const meltColor = useMemo(() => new THREE.Color('#1b5f9f'), []);
+  const softColor = useMemo(() => new THREE.Color('#1f619f'), []);
+  const meltColor = useMemo(() => new THREE.Color('#19588f'), []);
 
   const blobMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: coolColor.clone(),
     metalness: 0,
-    roughness: 0.31,
+    roughness: 0.3,
     clearcoat: 0.28,
     clearcoatRoughness: 0.22,
     ior: 1.47,
-    specularIntensity: 0.45,
-    specularColor: new THREE.Color('#b9d0e3'),
+    specularIntensity: 0.44,
+    specularColor: new THREE.Color('#b8cfe0'),
     bumpMap: meltTexture,
-    bumpScale: 0.00135,
-    envMapIntensity: 0.72,
+    bumpScale: 0.00125,
+    envMapIntensity: 0.7,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     depthTest: true,
   }), [coolColor, meltTexture]);
 
-  const massMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+  const meltMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: softColor.clone(),
     metalness: 0,
-    roughness: 0.24,
-    clearcoat: 0.43,
+    roughness: 0.23,
+    clearcoat: 0.42,
     clearcoatRoughness: 0.16,
     ior: 1.47,
-    specularIntensity: 0.5,
-    specularColor: new THREE.Color('#c4d9e9'),
+    specularIntensity: 0.49,
+    specularColor: new THREE.Color('#c2d6e5'),
     bumpMap: meltTexture,
-    bumpScale: 0.001,
-    envMapIntensity: 0.78,
+    bumpScale: 0.0009,
+    envMapIntensity: 0.76,
     transparent: true,
     opacity: 0,
     depthWrite: false,
     depthTest: true,
   }), [meltTexture, softColor]);
+
+  const barrelMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#26343e',
+    metalness: 0.52,
+    roughness: 0.34,
+    clearcoat: 0.04,
+    clearcoatRoughness: 0.46,
+    specularIntensity: 0.3,
+    envMapIntensity: 0.58,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.DoubleSide,
+  }), []);
+
+  const bandMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#53626d',
+    metalness: 0.68,
+    roughness: 0.24,
+    specularIntensity: 0.34,
+    envMapIntensity: 0.68,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  }), []);
+
+  const screwMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#8b969f',
+    metalness: 0.76,
+    roughness: 0.2,
+    specularIntensity: 0.4,
+    envMapIntensity: 0.78,
+    transparent: true,
+    opacity: 0,
+    depthWrite: true,
+  }), []);
 
   useEffect(() => {
     if (blobsRef.current) {
@@ -131,128 +199,159 @@ export default function PlasticizingMelt({ progressRef }) {
     }
     return () => {
       blobGeometry.dispose();
-      massGeometry.dispose();
+      screwFlightGeometry.dispose();
+      shotGeometry.dispose();
       blobMaterial.dispose();
-      massMaterial.dispose();
+      meltMaterial.dispose();
+      barrelMaterial.dispose();
+      bandMaterial.dispose();
+      screwMaterial.dispose();
       meltTexture.dispose();
     };
-  }, [blobGeometry, massGeometry, blobMaterial, massMaterial, meltTexture]);
+  }, [
+    blobGeometry,
+    screwFlightGeometry,
+    shotGeometry,
+    blobMaterial,
+    meltMaterial,
+    barrelMaterial,
+    bandMaterial,
+    screwMaterial,
+    meltTexture,
+  ]);
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current;
+    const barrel = barrelRef.current;
+    const screw = screwRef.current;
     const blobs = blobsRef.current;
-    const mass = massRef.current;
-    const neck = neckRef.current;
-    const gate = gateRef.current;
-    if (!group || !blobs || !mass || !neck || !gate) return;
+    const shot = shotRef.current;
+    if (!group || !barrel || !screw || !blobs || !shot) return;
 
     const p = progressRef.current;
     const time = clock.getElapsedTime();
-    const soften = range(p, 0.255, 0.34);
-    const coalesce = range(p, 0.31, 0.425);
-    const melt = range(p, 0.365, 0.47);
-    const gateDelivery = range(p, 0.43, 0.525);
-    const handoff = range(p, 0.52, 0.595);
-    const visibility = soften * (1 - handoff);
+    const chamberIn = range(p, 0.19, 0.245);
+    const chamberOut = range(p, 0.565, 0.625);
+    const chamberVisibility = chamberIn * (1 - chamberOut);
+    const soften = range(p, 0.255, 0.35);
+    const coalesce = range(p, 0.315, 0.455);
+    const accumulate = range(p, 0.365, 0.5);
+    const injectionPush = range(p, 0.46, 0.56);
+    const handoff = range(p, 0.545, 0.635);
+    const materialVisibility = soften * (1 - range(p, 0.605, 0.655));
 
-    group.visible = visibility > 0.003;
+    group.visible = chamberVisibility > 0.003 || materialVisibility > 0.003;
     if (!group.visible) return;
 
-    blobMaterial.opacity = visibility * THREE.MathUtils.lerp(0.68, 0.18, coalesce);
-    massMaterial.opacity = visibility * THREE.MathUtils.lerp(0.08, 0.84, melt);
-    blobMaterial.color.lerpColors(coolColor, softColor, coalesce);
-    massMaterial.color.lerpColors(softColor, meltColor, gateDelivery);
+    barrel.visible = chamberVisibility > 0.003;
+    screw.visible = chamberVisibility > 0.003;
+    barrelMaterial.opacity = chamberVisibility * 0.15;
+    bandMaterial.opacity = chamberVisibility * 0.38;
+    screwMaterial.opacity = chamberVisibility * 0.72;
 
-    blobMaterial.roughness = THREE.MathUtils.lerp(0.31, 0.22, coalesce);
+    const screwSpin = range(p, 0.205, 0.29) * (1 - range(p, 0.425, 0.505));
+    screw.rotation.y += delta * 0.3 * screwSpin;
+    screw.position.y = THREE.MathUtils.damp(
+      screw.position.y,
+      -0.14 * injectionPush,
+      5.4,
+      delta,
+    );
+
+    blobMaterial.opacity = materialVisibility * THREE.MathUtils.lerp(0.68, 0.14, coalesce);
+    meltMaterial.opacity = materialVisibility * accumulate * THREE.MathUtils.lerp(0.34, 0.82, coalesce);
+    blobMaterial.color.lerpColors(coolColor, softColor, coalesce);
+    meltMaterial.color.lerpColors(softColor, meltColor, injectionPush);
+    blobMaterial.roughness = THREE.MathUtils.lerp(0.3, 0.21, coalesce);
     blobMaterial.clearcoat = THREE.MathUtils.lerp(0.28, 0.4, coalesce);
-    blobMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.22, 0.16, coalesce);
-    massMaterial.roughness = THREE.MathUtils.lerp(0.24, 0.18, gateDelivery);
-    massMaterial.clearcoat = THREE.MathUtils.lerp(0.43, 0.54, gateDelivery);
-    massMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.16, 0.12, gateDelivery);
+    blobMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.22, 0.15, coalesce);
+    meltMaterial.roughness = THREE.MathUtils.lerp(0.23, 0.17, injectionPush);
+    meltMaterial.clearcoat = THREE.MathUtils.lerp(0.42, 0.52, injectionPush);
+    meltMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.16, 0.12, injectionPush);
 
     for (let i = 0; i < blobData.length; i += 1) {
       const item = blobData[i];
-      const localSoft = range(p, 0.255 + item.delay, 0.345 + item.delay);
-      const localMerge = range(p, 0.315 + item.delay * 0.4, 0.43 + item.delay * 0.2);
+      const localSoft = range(p, 0.255 + item.delay, 0.355 + item.delay);
+      const localMerge = range(p, 0.32 + item.delay * 0.4, 0.465 + item.delay * 0.18);
       const t = clamp01(item.t * 0.9 + 0.05);
-      const narrow = THREE.MathUtils.lerp(1, 0.18, localMerge);
-      const y = THREE.MathUtils.lerp(compact ? 2.45 : 2.7, 0.66, t);
-      const spiral = item.phase + t * 1.05;
-      const radial = item.radius * narrow;
+      const radialBase = THREE.MathUtils.lerp(compact ? 0.43 : 0.5, compact ? 0.17 : 0.2, t);
+      const radial = radialBase * THREE.MathUtils.lerp(1, 0.32, localMerge);
+      const angle = item.phase + t * 0.72;
+      const pullDown = localMerge * THREE.MathUtils.lerp(0.03, 0.14, 1 - t);
 
       helper.position.set(
-        Math.cos(spiral) * radial + Math.sin(item.phase * 0.4) * 0.05 * (1 - localMerge),
-        y + Math.sin(item.phase + time * 0.2) * 0.025,
-        Math.sin(spiral) * radial * 0.76 + item.depth * 0.07 * (1 - localMerge),
+        Math.cos(angle) * radial + item.depth * 0.025 * (1 - localMerge),
+        THREE.MathUtils.lerp(2.53, 1.18, t) - pullDown,
+        Math.sin(angle) * radial * 0.82 + item.depth * 0.035 * (1 - localMerge),
       );
       helper.rotation.set(
-        Math.sin(item.phase) * 0.12,
-        item.phase * 0.22,
-        Math.cos(item.phase) * 0.1,
+        Math.sin(item.phase) * 0.08,
+        item.phase * 0.16,
+        Math.cos(item.phase) * 0.07,
       );
-      const appear = 0.15 + localSoft * 0.85;
-      const dissolve = THREE.MathUtils.lerp(1, 0.18, localMerge);
-      const rounded = THREE.MathUtils.lerp(0.82, 1.05, localMerge);
+      const appear = 0.14 + localSoft * 0.86;
+      const flatten = THREE.MathUtils.lerp(1, 0.76, localMerge);
+      const swell = THREE.MathUtils.lerp(0.92, 1.18, localMerge);
+      const dissolve = THREE.MathUtils.lerp(1, 0.12, localMerge);
       const base = item.scale * appear * dissolve;
-      helper.scale.set(base * rounded, base * THREE.MathUtils.lerp(1.18, 0.92, localMerge), base * rounded);
+      helper.scale.set(base * swell, base * flatten, base * swell);
       helper.updateMatrix();
       blobs.setMatrixAt(i, helper.matrix);
     }
     blobs.instanceMatrix.needsUpdate = true;
 
-    const massVisible = melt * (1 - handoff * 0.82);
-    mass.visible = massVisible > 0.003;
-    mass.position.y = THREE.MathUtils.damp(
-      mass.position.y,
-      THREE.MathUtils.lerp(1.18, 0.72, gateDelivery),
-      5.4,
+    const shotVisible = accumulate * (1 - range(p, 0.605, 0.66));
+    shot.visible = shotVisible > 0.003;
+    shot.position.y = THREE.MathUtils.damp(
+      shot.position.y,
+      THREE.MathUtils.lerp(1.06, 0.82, injectionPush),
+      5.5,
       delta,
     );
-    const massPulse = 1 + Math.sin(time * 0.45) * 0.008 * melt;
-    mass.scale.x = THREE.MathUtils.damp(
-      mass.scale.x,
-      (compact ? 0.72 : 0.84) * THREE.MathUtils.lerp(0.72, 1, coalesce) * massPulse,
-      5.4,
-      delta,
-    );
-    mass.scale.z = THREE.MathUtils.damp(
-      mass.scale.z,
-      (compact ? 0.62 : 0.74) * THREE.MathUtils.lerp(0.72, 1, coalesce) / massPulse,
-      5.4,
-      delta,
-    );
-    mass.scale.y = THREE.MathUtils.damp(
-      mass.scale.y,
-      THREE.MathUtils.lerp(0.85, 1.28, melt) * (1 - handoff * 0.18),
-      5.4,
+    const shotPressure = THREE.MathUtils.lerp(0.76, 1, accumulate);
+    const squeeze = THREE.MathUtils.lerp(1, 0.76, handoff);
+    shot.scale.x = THREE.MathUtils.damp(shot.scale.x, (compact ? 0.76 : 0.88) * shotPressure * squeeze, 5.5, delta);
+    shot.scale.z = THREE.MathUtils.damp(shot.scale.z, (compact ? 0.68 : 0.78) * shotPressure * squeeze, 5.5, delta);
+    shot.scale.y = THREE.MathUtils.damp(
+      shot.scale.y,
+      THREE.MathUtils.lerp(0.72, 1.04, accumulate) * THREE.MathUtils.lerp(1, 0.48, handoff),
+      5.5,
       delta,
     );
 
-    const neckVisible = gateDelivery * (1 - handoff);
-    neck.visible = neckVisible > 0.003;
-    neck.position.y = THREE.MathUtils.damp(neck.position.y, 0.56, 5.8, delta);
-    neck.scale.set(
-      THREE.MathUtils.lerp(0.13, 0.19, gateDelivery),
-      THREE.MathUtils.lerp(0.3, 0.5, gateDelivery),
-      THREE.MathUtils.lerp(0.13, 0.19, gateDelivery),
-    );
-
-    gate.visible = neckVisible > 0.003;
-    const gateScale = THREE.MathUtils.lerp(0.2, 0.42, gateDelivery) * (1 - handoff * 0.55);
-    gate.scale.setScalar(gateScale);
-
-    if (lightRef.current) {
-      lightRef.current.intensity = THREE.MathUtils.damp(
-        lightRef.current.intensity,
-        visibility * (0.2 + coalesce * 0.3 + melt * 0.26),
+    if (heatLightRef.current) {
+      const heat = chamberVisibility * soften * (1 - handoff * 0.75);
+      heatLightRef.current.intensity = THREE.MathUtils.damp(
+        heatLightRef.current.intensity,
+        heat * 0.28,
         5,
         delta,
       );
     }
   });
 
+  const barrelRadius = compact ? 0.62 : 0.72;
+
   return (
     <group ref={groupRef} visible={false}>
+      <group ref={barrelRef} visible={false}>
+        <mesh position={[0, 1.9, 0]} material={barrelMaterial}>
+          <cylinderGeometry args={[barrelRadius, barrelRadius, 2.15, compact ? 36 : 48, 1, true]} />
+        </mesh>
+        {[2.68, 2.22, 1.76, 1.3].map((y) => (
+          <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={bandMaterial}>
+            <torusGeometry args={[barrelRadius + 0.018, 0.035, 8, compact ? 40 : 56]} />
+          </mesh>
+        ))}
+      </group>
+
+      <group ref={screwRef} visible={false}>
+        <mesh position={[0, 1.86, 0]} material={screwMaterial}>
+          <cylinderGeometry args={[compact ? 0.09 : 0.11, compact ? 0.09 : 0.11, 1.92, 28]} />
+        </mesh>
+        <mesh geometry={screwFlightGeometry} material={screwMaterial} />
+      </group>
+
       <instancedMesh
         ref={blobsRef}
         args={[blobGeometry, blobMaterial, blobData.length]}
@@ -260,22 +359,14 @@ export default function PlasticizingMelt({ progressRef }) {
         renderOrder={3}
       />
 
-      <mesh ref={massRef} geometry={massGeometry} material={massMaterial} visible={false} />
-
-      <mesh ref={neckRef} position={[0, 0.56, 0]} material={massMaterial} visible={false}>
-        <capsuleGeometry args={[0.18, 0.36, 6, compact ? 12 : 18]} />
-      </mesh>
-
-      <mesh ref={gateRef} position={[0, 0.42, 0]} material={massMaterial} visible={false}>
-        <sphereGeometry args={[0.2, compact ? 14 : 18, compact ? 10 : 12]} />
-      </mesh>
+      <mesh ref={shotRef} geometry={shotGeometry} material={meltMaterial} visible={false} />
 
       <pointLight
-        ref={lightRef}
-        position={[0, 0.95, 2.2]}
-        color="#9db8cf"
+        ref={heatLightRef}
+        position={[0, 1.65, 1.55]}
+        color="#d1a18a"
         intensity={0}
-        distance={4.8}
+        distance={3.3}
         decay={2}
       />
     </group>

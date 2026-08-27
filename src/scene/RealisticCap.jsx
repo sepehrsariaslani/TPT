@@ -88,8 +88,6 @@ function createRoughnessTexture(seed = 509, size = 64) {
 }
 
 function createCapBodyGeometry() {
-  // Slightly thinner than the previous hockey-puck silhouette while preserving
-  // a continuous moulded shoulder and shallow top crown.
   const profile = [
     [0, -0.35],
     [2.31, -0.35],
@@ -114,9 +112,11 @@ function createCapBodyGeometry() {
 
 function addRadialFillMask(material) {
   const fillRadius = { value: -0.08 };
+  const flowPhase = { value: 0 };
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uFillRadius = fillRadius;
+    shader.uniforms.uFlowPhase = flowPhase;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -129,20 +129,24 @@ function addRadialFillMask(material) {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec3 vInjectionLocalPosition;\nuniform float uFillRadius;',
+        '#include <common>\nvarying vec3 vInjectionLocalPosition;\nuniform float uFillRadius;\nuniform float uFlowPhase;',
       )
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
         vec2 injectionPlane = vec2(vInjectionLocalPosition.x * 0.99, vInjectionLocalPosition.z * 1.01);
         float injectionRadius = length(injectionPlane);
-        if (injectionRadius > uFillRadius) discard;`,
+        float flowAngle = atan(injectionPlane.y, injectionPlane.x);
+        float frontRipple = sin(flowAngle * 5.0 + uFlowPhase) * 0.012
+          + sin(flowAngle * 11.0 - uFlowPhase * 0.72) * 0.006;
+        float localFillFront = uFillRadius * (1.0 + frontRipple);
+        if (injectionRadius > localFillFront) discard;`,
       );
   };
 
-  material.customProgramCacheKey = () => 'tpt-cap-radial-injection-fill-v4';
+  material.customProgramCacheKey = () => 'tpt-cap-radial-injection-fill-v5';
   material.needsUpdate = true;
-  return fillRadius;
+  return { fillRadius, flowPhase };
 }
 
 export default function RealisticCap({ progressRef }) {
@@ -184,7 +188,7 @@ export default function RealisticCap({ progressRef }) {
     depthTest: true,
   }), [hotBodyColor, mouldTexture, roughnessTexture]);
 
-  const fillRadiusUniform = useMemo(() => addRadialFillMask(bodyMaterial), [bodyMaterial]);
+  const fillUniforms = useMemo(() => addRadialFillMask(bodyMaterial), [bodyMaterial]);
 
   const ribMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#153f77',
@@ -239,13 +243,13 @@ export default function RealisticCap({ progressRef }) {
   const flowFrontMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#2a6fb4',
     metalness: 0,
-    roughness: 0.18,
-    clearcoat: 0.52,
-    clearcoatRoughness: 0.12,
+    roughness: 0.2,
+    clearcoat: 0.44,
+    clearcoatRoughness: 0.14,
     ior: 1.47,
-    specularIntensity: 0.45,
+    specularIntensity: 0.4,
     specularColor: new THREE.Color('#c7dceb'),
-    envMapIntensity: 0.7,
+    envMapIntensity: 0.64,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -258,7 +262,6 @@ export default function RealisticCap({ progressRef }) {
 
     const helper = new THREE.Object3D();
     const ribCount = 120;
-
     for (let i = 0; i < ribCount; i += 1) {
       const angle = (i / ribCount) * TAU;
       const tinyVariation = 1 + Math.sin(angle * 11) * 0.008;
@@ -272,7 +275,6 @@ export default function RealisticCap({ progressRef }) {
       helper.updateMatrix();
       mesh.setMatrixAt(i, helper.matrix);
     }
-
     mesh.instanceMatrix.needsUpdate = true;
   }, []);
 
@@ -303,19 +305,21 @@ export default function RealisticCap({ progressRef }) {
     if (!group) return;
 
     const p = progressRef.current;
-    const injection = range(p, 0.455, 0.625);
-    const radialProgress = Math.pow(injection, 0.64);
+    const gatePrime = range(p, 0.525, 0.555);
+    const injection = range(p, 0.545, 0.685);
+    const radialProgress = Math.sqrt(injection);
     const fillRadius = THREE.MathUtils.lerp(0.035, 2.63, radialProgress);
-    fillRadiusUniform.value = fillRadius;
+    fillUniforms.fillRadius.value = fillRadius;
+    fillUniforms.flowPhase.value = injection * 1.45;
 
-    const outerFill = range(p, 0.575, 0.66);
-    const cooling = range(p, 0.61, 0.785);
-    const surfaceLock = range(p, 0.655, 0.805);
-    const shrink = range(p, 0.68, 0.81);
-    const ejection = range(p, 0.785, 0.845);
-    const hero = range(p, 0.81, 0.925);
+    const outerFill = range(p, 0.63, 0.71);
+    const cooling = range(p, 0.67, 0.8);
+    const surfaceLock = range(p, 0.705, 0.82);
+    const shrink = range(p, 0.735, 0.825);
+    const ejection = range(p, 0.795, 0.85);
+    const hero = range(p, 0.815, 0.93);
     const heroSettle = range(p, 0.875, 0.96);
-    const injectionActivity = range(p, 0.445, 0.475) * (1 - range(p, 0.61, 0.665));
+    const injectionActivity = gatePrime * (1 - range(p, 0.665, 0.71));
 
     const firstCool = clamp01(cooling / 0.55);
     const finalCool = clamp01((cooling - 0.55) / 0.45);
@@ -333,18 +337,18 @@ export default function RealisticCap({ progressRef }) {
     bodyMaterial.specularIntensity = THREE.MathUtils.lerp(0.54, 0.39, cooling);
     bodyMaterial.bumpScale = THREE.MathUtils.lerp(0.00075, 0.00155, surfaceLock);
 
-    const ribReveal = outerFill * range(p, 0.59, 0.67);
+    const ribReveal = outerFill * range(p, 0.655, 0.725);
     ribMaterial.opacity = ribReveal;
     ribMaterial.roughness = THREE.MathUtils.lerp(0.38, 0.47, cooling);
     ribMaterial.clearcoat = THREE.MathUtils.lerp(0.2, 0.11, cooling);
     ribMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.3, 0.39, cooling);
     ribMaterial.bumpScale = THREE.MathUtils.lerp(0.00115, 0.00175, surfaceLock);
 
-    const detailReveal = outerFill * range(p, 0.62, 0.735);
+    const detailReveal = outerFill * range(p, 0.68, 0.75);
     detailMaterial.opacity = detailReveal * 0.34;
-    shoulderMaterial.opacity = outerFill * range(p, 0.595, 0.69) * 0.42;
+    shoulderMaterial.opacity = outerFill * range(p, 0.65, 0.72) * 0.42;
 
-    group.visible = p > 0.447;
+    group.visible = p > 0.525;
     const ejectionLift = ejection * 0.052;
     const heroLift = THREE.MathUtils.lerp(ejectionLift, 0.024, heroSettle);
     group.position.y = THREE.MathUtils.damp(group.position.y, heroLift, 5.2, delta);
@@ -355,8 +359,7 @@ export default function RealisticCap({ progressRef }) {
     group.scale.y = THREE.MathUtils.damp(group.scale.y, shrinkY, 5.2, delta);
     group.scale.z = THREE.MathUtils.damp(group.scale.z, shrinkXZ, 5.2, delta);
 
-    // One restrained inspection turn after the process is finished.
-    const scrollTurn = range(p, 0.815, 0.95) * 0.075;
+    const scrollTurn = range(p, 0.82, 0.95) * 0.075;
     const inspectionDrift = Math.sin(clock.getElapsedTime() * 0.16) * 0.002 * heroSettle;
     group.rotation.y = THREE.MathUtils.damp(
       group.rotation.y,
@@ -368,18 +371,18 @@ export default function RealisticCap({ progressRef }) {
     group.rotation.z = THREE.MathUtils.damp(group.rotation.z, 0, 4.2, delta);
 
     if (flowFrontRef.current) {
-      const frontVisible = injectionActivity * (1 - range(injection, 0.92, 1));
+      const frontVisible = injectionActivity * (1 - range(injection, 0.93, 1));
       flowFrontRef.current.visible = frontVisible > 0.003 && fillRadius > 0.12;
       flowFrontRef.current.scale.set(fillRadius, fillRadius, 1);
-      flowFrontMaterial.opacity = frontVisible * 0.14;
+      flowFrontMaterial.opacity = frontVisible * 0.085;
     }
 
     if (gatePoolRef.current) {
-      const gateVisible = injectionActivity * (1 - range(p, 0.6, 0.655));
+      const gateVisible = gatePrime * (1 - range(p, 0.64, 0.69));
       gatePoolRef.current.visible = gateVisible > 0.003;
-      const gateScale = 0.82 + injection * 0.12;
+      const gateScale = 0.78 + injection * 0.16;
       gatePoolRef.current.scale.set(gateScale, 1, gateScale);
-      flowFrontMaterial.opacity = Math.max(flowFrontMaterial.opacity, gateVisible * 0.12);
+      flowFrontMaterial.opacity = Math.max(flowFrontMaterial.opacity, gateVisible * 0.09);
     }
   });
 
@@ -393,7 +396,6 @@ export default function RealisticCap({ progressRef }) {
         frustumCulled={false}
       />
 
-      {/* Restrained tooling cues; no large flat overlay or bright concentric discs. */}
       <mesh position={[0, 0.355, 0]} rotation={[Math.PI / 2, 0, 0]} material={shoulderMaterial}>
         <torusGeometry args={[2.22, 0.018, 7, 144]} />
       </mesh>
@@ -420,7 +422,7 @@ export default function RealisticCap({ progressRef }) {
         visible={false}
         renderOrder={5}
       >
-        <torusGeometry args={[1, 0.0055, 5, 128]} />
+        <torusGeometry args={[1, 0.0045, 5, 128]} />
       </mesh>
 
       <mesh
@@ -430,7 +432,7 @@ export default function RealisticCap({ progressRef }) {
         visible={false}
         renderOrder={5}
       >
-        <cylinderGeometry args={[0.062, 0.062, 0.012, 36]} />
+        <cylinderGeometry args={[0.058, 0.058, 0.01, 36]} />
       </mesh>
     </group>
   );

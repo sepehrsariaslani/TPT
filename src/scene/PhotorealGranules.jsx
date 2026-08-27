@@ -97,25 +97,20 @@ function getQualityCount() {
 
 function buildParticleData(count, compact) {
   const random = seededRandom(918273);
-  const data = Array.from({ length: count }, (_, i) => {
-    const side = i % 2 === 0 ? -1 : 1;
-    const t = random();
-    return {
-      side,
-      t,
-      phase: random() * TAU,
-      depth: (random() - 0.5) * 2,
-      width: (random() - 0.5) * 2,
-      size: 0.82 + random() * 0.2,
-      speed: 0.84 + random() * 0.2,
-      tint: random(),
-      variant: random() < 0.76 ? 0 : 1,
-      tumble: 0.74 + random() * 0.45,
-      fuseOffset: (random() - 0.5) * 0.026,
-      compact,
-    };
-  });
-  return data;
+  return Array.from({ length: count }, (_, i) => ({
+    side: i % 2 === 0 ? -1 : 1,
+    t: random(),
+    phase: random() * TAU,
+    depth: (random() - 0.5) * 2,
+    width: (random() - 0.5) * 2,
+    size: 0.82 + random() * 0.2,
+    speed: 0.84 + random() * 0.2,
+    tint: random(),
+    variant: random() < 0.76 ? 0 : 1,
+    tumble: 0.74 + random() * 0.45,
+    fuseOffset: (random() - 0.5) * 0.026,
+    compact,
+  }));
 }
 
 function resolveParticle(item, progress, time, position, euler, scale) {
@@ -153,25 +148,25 @@ function resolveParticle(item, progress, time, position, euler, scale) {
   const compressedEase = smooth(item.t);
   const compressedX = item.side * THREE.MathUtils.lerp(compact ? 0.82 : 1.22, 0.11, compressedEase)
     + Math.cos(item.phase) * (compact ? 0.09 : 0.15);
-  const compressedY = THREE.MathUtils.lerp(compact ? 2.7 : 2.5, 0.58, item.t)
+  const compressedY = THREE.MathUtils.lerp(compact ? 2.7 : 2.5, 0.72, item.t)
     + Math.sin(item.phase) * 0.055;
   const compressedZ = item.depth * THREE.MathUtils.lerp(compact ? 0.28 : 0.42, 0.08, compressedEase)
     + Math.sin(item.phase) * (compact ? 0.07 : 0.11);
 
   const preRadius = (compact ? 0.12 : 0.15) + ((item.phase / TAU) % 1) * (compact ? 0.32 : 0.48);
   const preX = Math.cos(item.phase) * preRadius + item.side * 0.05;
-  const preY = THREE.MathUtils.lerp(1.55, 0.72, item.t) + Math.sin(item.phase * 1.3) * 0.04;
+  const preY = THREE.MathUtils.lerp(1.72, 0.98, item.t) + Math.sin(item.phase * 1.3) * 0.04;
   const preZ = Math.sin(item.phase) * preRadius * 0.76;
 
   const absorbRadius = 0.035 + ((item.phase * 0.37) % 1) * (compact ? 0.09 : 0.13);
   const absorbX = Math.cos(item.phase) * absorbRadius;
-  const absorbY = 0.58 + (0.5 - item.t) * 0.16;
+  const absorbY = 0.95 + (0.5 - item.t) * 0.12;
   const absorbZ = Math.sin(item.phase) * absorbRadius * 0.7;
 
   const toFunnel = range(progress, 0.105, 0.225);
   const toCompressed = range(progress, 0.22, 0.335);
-  const toPreform = range(progress, 0.32, 0.415);
-  const toAbsorb = range(progress, 0.405, 0.5);
+  const toPreform = range(progress, 0.32, 0.425);
+  const toAbsorb = range(progress, 0.415, 0.535);
 
   let x = THREE.MathUtils.lerp(feedX, funnelX, toFunnel);
   let y = THREE.MathUtils.lerp(feedY, funnelY, toFunnel);
@@ -186,7 +181,7 @@ function resolveParticle(item, progress, time, position, euler, scale) {
     y = THREE.MathUtils.lerp(compressedY, preY, toPreform);
     z = THREE.MathUtils.lerp(compressedZ, preZ, toPreform);
   }
-  if (progress >= 0.405) {
+  if (progress >= 0.415) {
     x = THREE.MathUtils.lerp(preX, absorbX, toAbsorb);
     y = THREE.MathUtils.lerp(preY, absorbY, toAbsorb);
     z = THREE.MathUtils.lerp(preZ, absorbZ, toAbsorb);
@@ -206,15 +201,17 @@ function resolveParticle(item, progress, time, position, euler, scale) {
     item.phase * 0.37 + Math.cos(time * 0.14 + item.phase) * 0.015 * freeTumble,
   );
 
-  const soften = range(progress, 0.285, 0.405);
-  const fuse = range(progress, 0.385 + item.fuseOffset, 0.515 + item.fuseOffset * 0.25);
-  const swell = 1 + Math.sin(soften * Math.PI) * 0.055;
-  const fusionScale = THREE.MathUtils.lerp(1, 0.012, fuse);
-  const base = item.size * swell * fusionScale;
+  // The pellet first loses its crisp cylindrical silhouette, then is absorbed
+  // into the surrounding polymer. This overlap avoids the old shrink-to-zero pop.
+  const soften = range(progress, 0.275, 0.43);
+  const fuse = range(progress, 0.405 + item.fuseOffset, 0.555 + item.fuseOffset * 0.22);
+  const fusionScale = THREE.MathUtils.lerp(1, 0.018, fuse);
+  const base = item.size * fusionScale;
+  const roundness = soften * (1 - fuse * 0.35);
   scale.set(
-    base * THREE.MathUtils.lerp(1, 0.92, soften),
-    base * THREE.MathUtils.lerp(1, 1.04, soften),
-    base * THREE.MathUtils.lerp(1, 1.04, soften),
+    base * THREE.MathUtils.lerp(1, 0.82, roundness),
+    base * THREE.MathUtils.lerp(1, 1.18, roundness),
+    base * THREE.MathUtils.lerp(1, 1.16, roundness),
   );
 }
 

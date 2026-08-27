@@ -72,6 +72,7 @@ export default function CoolingRelease({ progressRef }) {
   const guideRef = useRef();
   const nozzleRef = useRef();
   const sprueRef = useRef();
+  const gateRef = useRef();
   const pinsRef = useRef();
   const coolLeftRef = useRef();
   const coolRightRef = useRef();
@@ -85,14 +86,14 @@ export default function CoolingRelease({ progressRef }) {
   const nozzleMaterial = useMemo(() => steelMaterial('#566672', 0.22, 0.7, 0.76), []);
   const pinMaterial = useMemo(() => steelMaterial('#9ca8b1', 0.17, 0.78, 0.86), []);
   const meltMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#1d5d9a',
+    color: '#1b588f',
     metalness: 0,
-    roughness: 0.2,
-    clearcoat: 0.46,
+    roughness: 0.19,
+    clearcoat: 0.43,
     clearcoatRoughness: 0.14,
     ior: 1.47,
-    specularIntensity: 0.47,
-    specularColor: new THREE.Color('#c5d8e7'),
+    specularIntensity: 0.46,
+    specularColor: new THREE.Color('#c2d5e4'),
     envMapIntensity: 0.74,
     transparent: true,
     opacity: 0,
@@ -125,30 +126,37 @@ export default function CoolingRelease({ progressRef }) {
     const guides = guideRef.current;
     const nozzle = nozzleRef.current;
     const sprue = sprueRef.current;
+    const gate = gateRef.current;
     const pins = pinsRef.current;
 
-    const mouldArrive = range(p, 0.405, 0.475);
-    const clamp = range(p, 0.445, 0.525);
-    const injection = range(p, 0.455, 0.64);
-    const cooling = range(p, 0.615, 0.775);
-    const release = range(p, 0.755, 0.84);
-    const mouldFade = 1 - range(p, 0.855, 0.915);
+    // The mould is fully established before the melt enters it. The nozzle seats,
+    // the sprue fills from top to bottom, then the gate opens into the cavity.
+    const mouldArrive = range(p, 0.405, 0.48);
+    const clamp = range(p, 0.45, 0.525);
+    const injection = range(p, 0.525, 0.685);
+    const cooling = range(p, 0.665, 0.795);
+    const release = range(p, 0.775, 0.845);
+    const mouldFade = 1 - range(p, 0.865, 0.925);
     const visibility = mouldArrive * mouldFade;
-    const ejection = range(p, 0.79, 0.845) * (1 - range(p, 0.865, 0.91));
+    const ejection = range(p, 0.795, 0.85) * (1 - range(p, 0.87, 0.915));
     const hero = range(p, 0.815, 0.93);
 
-    const nozzleApproach = range(p, 0.405, 0.48);
-    const nozzleRetract = range(p, 0.645, 0.715);
-    const nozzleVisibility = nozzleApproach * (1 - range(p, 0.735, 0.79));
-    const sprueFlow = range(p, 0.465, 0.515) * (1 - range(p, 0.63, 0.69));
+    const nozzleApproach = range(p, 0.43, 0.515);
+    const nozzleRetract = range(p, 0.67, 0.735);
+    const nozzleVisibility = nozzleApproach * (1 - range(p, 0.75, 0.805));
+    const sprueFill = range(p, 0.505, 0.565);
+    const sprueDrain = range(p, 0.66, 0.71);
+    const sprueFlow = sprueFill * (1 - sprueDrain);
+    const gateFill = range(p, 0.545, 0.59);
+    const gateFlow = gateFill * (1 - range(p, 0.665, 0.715));
 
     frameMaterial.opacity = visibility * THREE.MathUtils.lerp(0.58, 0.88, clamp);
     plateMaterial.opacity = visibility * THREE.MathUtils.lerp(0.62, 0.92, clamp);
     edgeMaterial.opacity = visibility * THREE.MathUtils.lerp(0.72, 0.96, clamp);
     guideMaterial.opacity = visibility * THREE.MathUtils.lerp(0.55, 0.86, clamp);
-    nozzleMaterial.opacity = nozzleVisibility * 0.9;
+    nozzleMaterial.opacity = nozzleVisibility * 0.92;
     pinMaterial.opacity = ejection * 0.84;
-    meltMaterial.opacity = sprueFlow * THREE.MathUtils.lerp(0.42, 0.72, injection);
+    meltMaterial.opacity = Math.max(sprueFlow * 0.72, gateFlow * 0.78) * THREE.MathUtils.lerp(0.8, 1, injection);
 
     if (top) {
       top.visible = visibility > 0.003;
@@ -173,31 +181,39 @@ export default function CoolingRelease({ progressRef }) {
 
     if (nozzle) {
       nozzle.visible = nozzleVisibility > 0.003;
-      const seatedY = THREE.MathUtils.lerp(2.65, 1.18, nozzleApproach);
+      const seatedY = THREE.MathUtils.lerp(2.65, 1.16, nozzleApproach);
       const targetY = THREE.MathUtils.lerp(seatedY, 2.42, nozzleRetract);
       nozzle.position.y = THREE.MathUtils.damp(nozzle.position.y, targetY, 6.4, delta);
     }
 
     if (sprue) {
       sprue.visible = sprueFlow > 0.003;
-      const length = 0.62;
-      const topY = 1.02;
-      const targetScaleY = THREE.MathUtils.lerp(0.05, 1, sprueFlow);
-      sprue.scale.y = THREE.MathUtils.damp(sprue.scale.y, targetScaleY, 7.3, delta);
+      const length = 0.66;
+      const topY = 1.03;
+      const targetScaleY = THREE.MathUtils.lerp(0.035, 1, sprueFill);
+      sprue.scale.y = THREE.MathUtils.damp(sprue.scale.y, targetScaleY, 7.4, delta);
       sprue.position.y = THREE.MathUtils.damp(
         sprue.position.y,
         topY - (length * targetScaleY) / 2,
-        7.3,
+        7.4,
         delta,
       );
-      const pressure = THREE.MathUtils.lerp(0.86, 1, range(p, 0.54, 0.63));
+      const pressure = THREE.MathUtils.lerp(0.88, 1, range(p, 0.57, 0.65));
       sprue.scale.x = THREE.MathUtils.damp(sprue.scale.x, pressure, 6, delta);
       sprue.scale.z = THREE.MathUtils.damp(sprue.scale.z, pressure, 6, delta);
     }
 
+    if (gate) {
+      gate.visible = gateFlow > 0.003;
+      const gateScaleY = THREE.MathUtils.lerp(0.08, 1, gateFill);
+      gate.scale.y = THREE.MathUtils.damp(gate.scale.y, gateScaleY, 7.6, delta);
+      gate.scale.x = THREE.MathUtils.damp(gate.scale.x, THREE.MathUtils.lerp(0.82, 1, gateFill), 6.8, delta);
+      gate.scale.z = THREE.MathUtils.damp(gate.scale.z, THREE.MathUtils.lerp(0.82, 1, gateFill), 6.8, delta);
+    }
+
     if (pins) {
       pins.visible = ejection > 0.003;
-      const stroke = range(p, 0.795, 0.845);
+      const stroke = range(p, 0.8, 0.85);
       pins.position.y = THREE.MathUtils.damp(
         pins.position.y,
         THREE.MathUtils.lerp(-0.62, -0.31, stroke),
@@ -277,10 +293,17 @@ export default function CoolingRelease({ progressRef }) {
         <mesh position={[0, -0.18, 0]} material={nozzleMaterial}>
           <cylinderGeometry args={[0.17, 0.05, 0.38, 40]} />
         </mesh>
+        <mesh position={[0, -0.18, 0]} material={meltMaterial}>
+          <cylinderGeometry args={[0.039, 0.036, 0.38, 24]} />
+        </mesh>
       </group>
 
       <mesh ref={sprueRef} position={[0, 0.72, 0]} material={meltMaterial} visible={false}>
-        <cylinderGeometry args={[0.055, 0.045, 0.62, 28]} />
+        <cylinderGeometry args={[0.055, 0.043, 0.66, 28]} />
+      </mesh>
+
+      <mesh ref={gateRef} position={[0, 0.36, 0]} material={meltMaterial} visible={false}>
+        <cylinderGeometry args={[0.042, 0.026, 0.12, 24]} />
       </mesh>
 
       <group ref={pinsRef} position={[0, -0.62, 0]} visible={false}>
