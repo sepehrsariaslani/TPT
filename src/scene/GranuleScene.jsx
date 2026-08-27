@@ -168,6 +168,7 @@ function CameraRig({ progressRef }) {
     const plasticizing = range(p, 0.2, 0.335) * (1 - range(p, 0.5, 0.61));
     const gateHandoff = range(p, 0.355, 0.45) * (1 - range(p, 0.58, 0.69));
     const clamping = range(p, 0.385, 0.53) * (1 - range(p, 0.68, 0.77));
+    const mouldInspect = range(p, 0.405, 0.49) * (1 - range(p, 0.64, 0.72));
     const cooling = range(p, 0.55, 0.735) * (1 - range(p, 0.79, 0.87));
     const release = range(p, 0.74, 0.845);
     const hero = range(p, 0.805, 0.92);
@@ -178,7 +179,8 @@ function CameraRig({ progressRef }) {
     const basePointer = mobile ? 0 : tablet ? 0.055 : 0.095;
     const pointerAmount = basePointer * (1 - hero * 0.86);
     const heroSide = mobile ? 0 : tablet ? 0.05 : 0.1;
-    const targetX = pointer.x * pointerAmount + hero * heroSide;
+    const inspectSide = mobile ? 0 : tablet ? 0.105 : 0.19;
+    const targetX = pointer.x * pointerAmount + hero * heroSide + mouldInspect * inspectSide;
 
     const targetY = mobile
       ? 2.52
@@ -198,6 +200,7 @@ function CameraRig({ progressRef }) {
         - plasticizing * 0.14
         - gateHandoff * 0.09
         + clamping * 0.055
+        + mouldInspect * 0.035
         - cooling * 0.06
         - release * 0.05
         + pointer.y * 0.055 * (1 - hero)
@@ -206,8 +209,9 @@ function CameraRig({ progressRef }) {
         + braid * 0.035;
 
     // The camera briefly breathes outward while the mould assembly enters so the
-    // guide pillars, cavity/core plates and nozzle all fit in frame. It pushes back
-    // toward the product only after release.
+    // guide pillars, cavity/core plates and nozzle all fit in frame. During fill it
+    // also moves slightly off-axis to reveal cavity depth instead of showing a flat
+    // front-on technical diagram.
     const targetZ = mobile
       ? 16.2
         + feed * 0.62
@@ -226,6 +230,7 @@ function CameraRig({ progressRef }) {
           - plasticizing * 0.39
           - gateHandoff * 0.2
           + clamping * 0.2
+          + mouldInspect * 0.06
           - cooling * 0.08
           - product * 0.62
           - hero * 0.42
@@ -236,6 +241,7 @@ function CameraRig({ progressRef }) {
           - plasticizing * 0.45
           - gateHandoff * 0.24
           + clamping * 0.22
+          + mouldInspect * 0.075
           - cooling * 0.1
           - product * 0.54
           - hero * 0.46
@@ -251,6 +257,7 @@ function CameraRig({ progressRef }) {
       - plasticizing * (mobile ? 0.42 : 0.7)
       - gateHandoff * (mobile ? 0.12 : 0.22)
       + clamping * (mobile ? 0.65 : tablet ? 0.42 : 0.3)
+      + mouldInspect * (mobile ? 0 : 0.12)
       - hero * (mobile ? 0.2 : 0.42);
     const nextFov = THREE.MathUtils.damp(camera.fov, targetFov, 3.7, delta);
     if (Math.abs(nextFov - camera.fov) > 0.001) {
@@ -274,6 +281,7 @@ function CameraRig({ progressRef }) {
         - plasticizing * 0.17
         - gateHandoff * 0.075
         + clamping * 0.035
+        + mouldInspect * 0.018
         - cooling * 0.035
         - product * 0.13
         - hero * 0.055;
