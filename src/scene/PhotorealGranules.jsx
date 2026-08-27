@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
+const STREAM_COUNT = 7;
+
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const smooth = (value) => {
   const t = clamp01(value);
@@ -29,10 +31,10 @@ function createMicroTexture(seed = 91, size = 48) {
     for (let x = 0; x < size; x += 1) {
       const nx = x / size;
       const ny = y / size;
-      const broad = Math.sin(nx * TAU * 6.2 + ny * 4.1) * 2.8;
-      const fine = Math.sin(nx * TAU * 18.0 - ny * 11.0) * 1.3;
-      const grain = (random() - 0.5) * 7.5;
-      pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + fine + grain));
+      const broad = Math.sin(nx * TAU * 5.8 + ny * 4.4) * 2.3;
+      const cutter = Math.sin(nx * TAU * 17.0 - ny * 9.5) * 1.1;
+      const grain = (random() - 0.5) * 6.4;
+      pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + cutter + grain));
     }
   }
 
@@ -45,13 +47,13 @@ function createMicroTexture(seed = 91, size = 48) {
   );
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4.2, 1.8);
+  texture.repeat.set(4.0, 1.8);
   texture.colorSpace = THREE.NoColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
 
-function deformGeometry(geometry, phase, strength = 0.007) {
+function deformGeometry(geometry, phase, strength = 0.005) {
   const position = geometry.attributes.position;
 
   for (let i = 0; i < position.count; i += 1) {
@@ -60,11 +62,11 @@ function deformGeometry(geometry, phase, strength = 0.007) {
     const z = position.getZ(i);
     const radial = 1
       + Math.sin(x * 29 + y * 41 + z * 23 + phase) * strength
-      + Math.cos(x * 17 - y * 31 + z * 37 + phase * 0.7) * strength * 0.45;
+      + Math.cos(x * 17 - y * 31 + z * 37 + phase * 0.7) * strength * 0.42;
 
     position.setXYZ(
       i,
-      x * (1 + Math.sin(z * 22 + phase) * strength * 0.24),
+      x * (1 + Math.sin(z * 22 + phase) * strength * 0.2),
       y * radial,
       z * radial,
     );
@@ -77,21 +79,21 @@ function deformGeometry(geometry, phase, strength = 0.007) {
 
 function makePelletGeometry(type) {
   if (type === 2) {
-    const geometry = new THREE.DodecahedronGeometry(0.082, 1);
-    geometry.scale(1.15, 0.9, 0.84);
-    return deformGeometry(geometry, 4.2, 0.018);
+    const geometry = new THREE.DodecahedronGeometry(0.066, 1);
+    geometry.scale(1.12, 0.92, 0.86);
+    return deformGeometry(geometry, 4.2, 0.014);
   }
 
   const profile = type === 0
     ? [
-      [0.0, -0.116], [0.045, -0.116], [0.064, -0.109], [0.074, -0.094],
-      [0.079, -0.066], [0.080, 0.066], [0.075, 0.094], [0.065, 0.109],
-      [0.045, 0.116], [0.0, 0.116],
+      [0.0, -0.098], [0.038, -0.098], [0.054, -0.092], [0.064, -0.079],
+      [0.069, -0.056], [0.070, 0.056], [0.065, 0.079], [0.055, 0.092],
+      [0.038, 0.098], [0.0, 0.098],
     ]
     : [
-      [0.0, -0.111], [0.039, -0.109], [0.058, -0.101], [0.071, -0.083],
-      [0.079, -0.052], [0.081, 0], [0.079, 0.052], [0.071, 0.083],
-      [0.058, 0.101], [0.039, 0.109], [0.0, 0.111],
+      [0.0, -0.094], [0.034, -0.092], [0.050, -0.085], [0.061, -0.07],
+      [0.068, -0.044], [0.069, 0], [0.068, 0.044], [0.061, 0.07],
+      [0.050, 0.085], [0.034, 0.092], [0.0, 0.094],
     ];
 
   const geometry = new THREE.LatheGeometry(
@@ -99,18 +101,18 @@ function makePelletGeometry(type) {
     type === 0 ? 14 : 12,
   );
   geometry.rotateZ(Math.PI / 2);
-  if (type === 1) geometry.scale(1.03, 0.95, 1.01);
-  return deformGeometry(geometry, 1.3 + type * 1.8, type === 0 ? 0.004 : 0.0065);
+  if (type === 1) geometry.scale(1.04, 0.96, 1.01);
+  return deformGeometry(geometry, 1.3 + type * 1.8, type === 0 ? 0.0035 : 0.0055);
 }
 
 function getQualityCount() {
-  if (typeof window === 'undefined') return 1000;
+  if (typeof window === 'undefined') return 1100;
   const width = window.innerWidth;
   const cores = navigator.hardwareConcurrency || 6;
 
-  if (width < 680) return cores <= 4 ? 520 : 720;
-  if (width < 1100) return cores <= 4 ? 760 : 1040;
-  return cores <= 4 ? 980 : 1420;
+  if (width < 680) return cores <= 4 ? 560 : 760;
+  if (width < 1100) return cores <= 4 ? 820 : 1080;
+  return cores <= 4 ? 1100 : 1540;
 }
 
 function write3(target, i3, x, y, z) {
@@ -122,122 +124,129 @@ function write3(target, i3, x, y, z) {
 function buildParticleData(count) {
   const random = seededRandom(918273);
   const stream = new Float32Array(count * 3);
-  const gathering = new Float32Array(count * 3);
-  const swirl = new Float32Array(count * 3);
+  const funnel = new Float32Array(count * 3);
+  const compressed = new Float32Array(count * 3);
+  const preform = new Float32Array(count * 3);
   const surface = new Float32Array(count * 3);
-  const flow = new Float32Array(count * 3);
+  const absorb = new Float32Array(count * 3);
   const rotation = new Float32Array(count * 3);
   const scale = new Float32Array(count * 3);
   const tint = new Float32Array(count);
   const phase = new Float32Array(count);
+  const pathT = new Float32Array(count);
   const flutter = new Float32Array(count);
   const speed = new Float32Array(count);
   const lag = new Float32Array(count);
+  const fuseOffset = new Float32Array(count);
   const variant = new Uint8Array(count);
 
   for (let i = 0; i < count; i += 1) {
     const i3 = i * 3;
     const t = random();
-    const angle = random() * TAU;
+    const lane = i % STREAM_COUNT;
+    const lane01 = lane / (STREAM_COUNT - 1);
+    const laneX = (lane01 - 0.5) * 3.7;
+    const laneAngle = (lane / STREAM_COUNT) * TAU - Math.PI * 0.5;
     const localPhase = random() * TAU;
 
+    pathT[i] = t;
     phase[i] = localPhase;
     tint[i] = random();
-    flutter[i] = 0.48 + random() * 0.68;
-    speed[i] = 0.8 + random() * 0.42;
-    lag[i] = (random() - 0.5) * 0.028;
+    flutter[i] = 0.46 + random() * 0.7;
+    speed[i] = 0.78 + random() * 0.44;
+    lag[i] = (random() - 0.5) * 0.022;
+    fuseOffset[i] = (random() - 0.5) * 0.052;
 
     const pick = random();
-    variant[i] = pick < 0.62 ? 0 : pick < 0.9 ? 1 : 2;
+    variant[i] = pick < 0.68 ? 0 : pick < 0.95 ? 1 : 2;
 
-    // Stage 01 — a dense but imperfect gravity stream. Every pellet starts here.
-    const streamRadius = Math.pow(random(), 1.75) * 1.48;
+    // Stage 01 — seven clearly separated vertical pellet streams.
+    // They are made only of pellets: there are no rendered guide lines.
     write3(
       stream,
       i3,
-      Math.cos(angle) * streamRadius + (random() - 0.5) * 0.14,
-      8.8 - t * 16.9 + (random() - 0.5) * 0.28,
-      Math.sin(angle) * streamRadius * 0.78 + (random() - 0.5) * 0.14,
+      laneX + (random() - 0.5) * 0.22,
+      9.1 - t * 18.0 + (random() - 0.5) * 0.22,
+      Math.sin(lane * 1.7) * 0.42 + (random() - 0.5) * 0.22,
     );
 
-    // Stage 02 — pellets broaden into a low circular flow without any neon guides.
+    // Stage 02 — the separate streams bend inward and begin to braid.
+    const funnelTurns = 3.15 + lane * 0.055;
+    const funnelAngle = laneAngle + t * TAU * funnelTurns + localPhase * 0.035;
+    const funnelRadius = 3.65 - t * 2.15 + Math.sin(t * TAU * 1.8 + lane) * 0.09;
+    write3(
+      funnel,
+      i3,
+      Math.cos(funnelAngle) * funnelRadius,
+      5.8 - t * 10.2 + (random() - 0.5) * 0.18,
+      Math.sin(funnelAngle) * funnelRadius * 0.82,
+    );
+
+    // Stage 03 — the braid tightens into a dense, shallow tornado made by pellets.
+    const tightTurns = 4.35 + lane * 0.07;
+    const tightAngle = laneAngle + t * TAU * tightTurns + localPhase * 0.04;
+    const tightRadius = 3.0 - t * 1.85 + Math.sin(t * TAU * 2.4 + localPhase) * 0.08;
+    write3(
+      compressed,
+      i3,
+      Math.cos(tightAngle) * tightRadius,
+      4.15 - t * 6.9 + (random() - 0.5) * 0.16,
+      Math.sin(tightAngle) * tightRadius * 0.84,
+    );
+
+    // Stage 04 — the streams flatten into concentric material bands above the cap.
     const band = Math.floor(random() * 8);
-    const gatherRadius = 0.9 + band * 0.36 + random() * 0.26;
-    const gatherAngle = angle + t * TAU * (1.15 + (band % 3) * 0.2);
+    const bandRadius = 0.48 + band * 0.29 + random() * 0.18;
+    const bandAngle = localPhase + t * TAU * (1.15 + (band % 3) * 0.16);
     write3(
-      gathering,
+      preform,
       i3,
-      Math.cos(gatherAngle) * gatherRadius,
-      0.72 + (band - 3.5) * 0.06 + (random() - 0.5) * 0.16,
-      Math.sin(gatherAngle) * gatherRadius * 0.76,
+      Math.cos(bandAngle) * bandRadius,
+      0.83 + (band - 3.5) * 0.018 + (random() - 0.5) * 0.055,
+      Math.sin(bandAngle) * bandRadius * 0.96,
     );
 
-    // Stage 03/04 — the pellets themselves create the tornado. No TubeGeometry lines.
-    const turns = 4.7 + (i % 5) * 0.17 + random() * 0.5;
-    const swirlAngle = angle + t * TAU * turns;
-    const swirlRadius = 4.0 - t * 2.75
-      + Math.sin(t * TAU * 2.4 + localPhase) * 0.11
-      + (random() - 0.5) * 0.1;
-    write3(
-      swirl,
-      i3,
-      Math.cos(swirlAngle) * swirlRadius,
-      4.65 - t * 8.0 + (random() - 0.5) * 0.22,
-      Math.sin(swirlAngle) * swirlRadius * 0.83,
-    );
-
-    // Stage 05 — settle ON the cap, not inside it. This prevents visual disappearance.
+    // Stage 05 — each pellet gets a real target on the product surface.
     const surfacePick = random();
-    if (surfacePick < 0.72) {
-      const radius = Math.sqrt(random()) * 2.26;
+    if (surfacePick < 0.74) {
+      const radius = Math.sqrt(random()) * 2.27;
       const a = random() * TAU;
-      write3(
-        surface,
-        i3,
-        Math.cos(a) * radius,
-        0.57 + random() * 0.035,
-        Math.sin(a) * radius,
-      );
+      const sx = Math.cos(a) * radius;
+      const sz = Math.sin(a) * radius;
+      write3(surface, i3, sx, 0.625 + random() * 0.035, sz);
 
-      // Stage 06 — keep circulating just above the top surface.
-      const flowRadius = Math.min(2.42, radius + 0.06 + random() * 0.12);
-      const flowAngle = a + (random() - 0.5) * 0.12;
-      write3(
-        flow,
-        i3,
-        Math.cos(flowAngle) * flowRadius,
-        0.61 + random() * 0.07,
-        Math.sin(flowAngle) * flowRadius,
-      );
+      // Absorption target lies just below the top skin. Pellets reach it only
+      // while simultaneously shrinking, so the material appears to fuse.
+      write3(absorb, i3, sx, 0.475 - random() * 0.035, sz);
     } else {
       const a = random() * TAU;
-      const radius = 2.53 + random() * 0.12;
-      const y = -0.3 + random() * 0.78;
-      write3(surface, i3, Math.cos(a) * radius, y, Math.sin(a) * radius);
-
-      const flowRadius = radius + 0.08 + random() * 0.1;
+      const radius = 2.56 + random() * 0.08;
+      const y = -0.28 + random() * 0.77;
+      const sx = Math.cos(a) * radius;
+      const sz = Math.sin(a) * radius;
+      write3(surface, i3, sx, y, sz);
       write3(
-        flow,
+        absorb,
         i3,
-        Math.cos(a) * flowRadius,
-        y + (random() - 0.5) * 0.05,
-        Math.sin(a) * flowRadius,
+        Math.cos(a) * (radius - 0.16),
+        y,
+        Math.sin(a) * (radius - 0.16),
       );
     }
 
-    const base = 0.82 + random() * 0.2;
+    const base = 0.8 + random() * 0.2;
     if (variant[i] === 0) {
-      scale[i3] = base * (0.94 + random() * 0.14);
-      scale[i3 + 1] = base * (0.91 + random() * 0.08);
-      scale[i3 + 2] = base * (0.92 + random() * 0.08);
+      scale[i3] = base * (0.92 + random() * 0.14);
+      scale[i3 + 1] = base * (0.9 + random() * 0.09);
+      scale[i3 + 2] = base * (0.91 + random() * 0.09);
     } else if (variant[i] === 1) {
-      scale[i3] = base * (1.0 + random() * 0.16);
-      scale[i3 + 1] = base * (0.87 + random() * 0.1);
-      scale[i3 + 2] = base * (0.89 + random() * 0.1);
+      scale[i3] = base * (0.98 + random() * 0.15);
+      scale[i3 + 1] = base * (0.86 + random() * 0.1);
+      scale[i3 + 2] = base * (0.88 + random() * 0.1);
     } else {
-      scale[i3] = base * (0.86 + random() * 0.16);
-      scale[i3 + 1] = base * (0.82 + random() * 0.14);
-      scale[i3 + 2] = base * (0.84 + random() * 0.14);
+      scale[i3] = base * (0.85 + random() * 0.13);
+      scale[i3 + 1] = base * (0.82 + random() * 0.12);
+      scale[i3 + 2] = base * (0.84 + random() * 0.12);
     }
 
     rotation[i3] = random() * TAU;
@@ -247,17 +256,20 @@ function buildParticleData(count) {
 
   return {
     stream,
-    gathering,
-    swirl,
+    funnel,
+    compressed,
+    preform,
     surface,
-    flow,
+    absorb,
     rotation,
     scale,
     tint,
     phase,
+    pathT,
     flutter,
     speed,
     lag,
+    fuseOffset,
     variant,
   };
 }
@@ -265,68 +277,81 @@ function buildParticleData(count) {
 function resolvePosition(data, index, rawProgress, time, position, euler, scaleVector) {
   const i3 = index * 3;
   const progress = clamp01(rawProgress + data.lag[index]);
+  const phase = data.phase[index];
 
   let from = data.stream;
-  let to = data.gathering;
-  let mix = range(progress, 0.08, 0.28);
-  let turbulence = Math.sin(mix * Math.PI) * 0.14;
+  let to = data.funnel;
+  let mix = range(progress, 0.1, 0.29);
+  let turbulence = Math.sin(mix * Math.PI) * 0.12;
 
-  if (progress >= 0.28 && progress < 0.55) {
-    from = data.gathering;
-    to = data.swirl;
-    mix = range(progress, 0.28, 0.55);
-    turbulence = Math.sin(mix * Math.PI) * 0.22;
-  } else if (progress >= 0.55 && progress < 0.82) {
-    from = data.swirl;
+  if (progress >= 0.29 && progress < 0.49) {
+    from = data.funnel;
+    to = data.compressed;
+    mix = range(progress, 0.29, 0.49);
+    turbulence = Math.sin(mix * Math.PI) * 0.16;
+  } else if (progress >= 0.49 && progress < 0.67) {
+    from = data.compressed;
+    to = data.preform;
+    mix = range(progress, 0.49, 0.67);
+    turbulence = Math.sin(mix * Math.PI) * 0.11;
+  } else if (progress >= 0.67 && progress < 0.82) {
+    from = data.preform;
     to = data.surface;
-    mix = range(progress, 0.55, 0.82);
-    turbulence = Math.sin(mix * Math.PI) * 0.14;
+    mix = range(progress, 0.67, 0.82);
+    turbulence = Math.sin(mix * Math.PI) * 0.055;
   } else if (progress >= 0.82) {
     from = data.surface;
-    to = data.flow;
-    mix = range(progress, 0.82, 1.0);
-    turbulence = 0.018;
+    to = data.absorb;
+    mix = range(progress, 0.82, 0.94);
+    turbulence = 0.008;
   }
 
-  const phase = data.phase[index];
-  const liveFall = 1 - range(progress, 0.08, 0.2);
-  const fallCycle = ((time * 0.31 * data.speed[index] + phase / TAU) % 1) * 1.2 * liveFall;
-  const settle = range(progress, 0.69, 0.88);
-  const micro = (0.012 + data.flutter[index] * 0.006) * (1 - settle * 0.8);
+  // At the beginning the seven columns keep moving downward, so they read as
+  // real material feeds instead of a frozen cloud.
+  let fromY = from[i3 + 1];
+  if (progress < 0.24) {
+    const movingT = (data.pathT[index] + time * 0.028 * data.speed[index]) % 1;
+    const live = 1 - range(progress, 0.12, 0.24);
+    const animatedY = 9.1 - movingT * 18.0;
+    fromY = THREE.MathUtils.lerp(fromY, animatedY, live);
+  }
+
+  const settle = range(progress, 0.64, 0.84);
+  const micro = (0.01 + data.flutter[index] * 0.005) * (1 - settle * 0.86);
 
   position.set(
     THREE.MathUtils.lerp(from[i3], to[i3], mix)
-      + Math.cos(phase + time * 0.72) * turbulence
-      + Math.sin(time * 1.35 + phase) * micro,
-    THREE.MathUtils.lerp(from[i3 + 1], to[i3 + 1], mix)
-      - fallCycle
-      + Math.sin(phase * 0.71 + time * 0.92) * turbulence * 0.1,
+      + Math.cos(phase + time * 0.66) * turbulence
+      + Math.sin(time * 1.2 + phase) * micro,
+    THREE.MathUtils.lerp(fromY, to[i3 + 1], mix)
+      + Math.sin(phase * 0.71 + time * 0.84) * turbulence * 0.08,
     THREE.MathUtils.lerp(from[i3 + 2], to[i3 + 2], mix)
-      + Math.sin(phase + time * 0.67) * turbulence * 0.75
-      + Math.cos(time * 1.22 + phase) * micro,
+      + Math.sin(phase + time * 0.63) * turbulence * 0.74
+      + Math.cos(time * 1.1 + phase) * micro,
   );
 
-  // Crucial: at the end, granules keep flowing around the formed product forever.
-  // They never get zero scale, zero opacity, or a target inside the cap mesh.
-  const finalFlow = range(progress, 0.78, 1.0);
-  const orbitAngle = time * (0.15 + data.speed[index] * 0.05) + phase;
-  position.x += Math.cos(orbitAngle) * 0.035 * finalFlow;
-  position.z += Math.sin(orbitAngle) * 0.035 * finalFlow;
-  position.y += Math.sin(time * 0.55 + phase * 0.6) * 0.012 * finalFlow;
-
-  const activeSwirl = range(progress, 0.2, 0.46) * (1 - range(progress, 0.72, 0.88));
+  const braid = range(progress, 0.18, 0.42) * (1 - range(progress, 0.62, 0.76));
+  const forming = range(progress, 0.55, 0.76) * (1 - range(progress, 0.82, 0.9));
   euler.set(
-    data.rotation[i3] + time * (0.08 + data.flutter[index] * 0.025),
-    data.rotation[i3 + 1] + activeSwirl * progress * 2.6 + time * activeSwirl * 0.08,
-    data.rotation[i3 + 2] + time * (0.06 + data.flutter[index] * 0.02),
+    data.rotation[i3] + time * (0.07 + data.flutter[index] * 0.022),
+    data.rotation[i3 + 1] + braid * 2.2 + forming * 0.65,
+    data.rotation[i3 + 2] + time * (0.05 + data.flutter[index] * 0.018),
   );
 
-  const compact = THREE.MathUtils.lerp(1, 0.96, settle);
-  const pulse = 1 + Math.sin(time * 1.1 + phase) * 0.0025 * (1 - settle);
+  // Final fusion: nothing is suddenly hidden. Each pellet is staggered,
+  // approaches the skin, compresses, and is gradually absorbed into the solid.
+  // By ~92% scroll the product is visually clean and can hold before section 2.
+  const fuseStart = 0.755 + data.fuseOffset[index];
+  const fuseEnd = 0.9 + data.fuseOffset[index] * 0.28;
+  const fuse = range(rawProgress, fuseStart, fuseEnd);
+  const compact = THREE.MathUtils.lerp(1, 0.82, range(progress, 0.68, 0.8));
+  const fusionScale = THREE.MathUtils.lerp(1, 0.018, fuse);
+  const pulse = 1 + Math.sin(time * 1.0 + phase) * 0.002 * (1 - fuse);
+
   scaleVector.set(
-    data.scale[i3] * compact * pulse,
-    data.scale[i3 + 1] * compact / pulse,
-    data.scale[i3 + 2] * compact,
+    data.scale[i3] * compact * fusionScale * pulse,
+    data.scale[i3 + 1] * compact * fusionScale / pulse,
+    data.scale[i3 + 2] * compact * fusionScale,
   );
 }
 
@@ -344,7 +369,7 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
     if (!mesh) return;
 
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    mesh.renderOrder = 5;
+    mesh.renderOrder = 4;
 
     const dark = new THREE.Color(palette[0]);
     const mid = new THREE.Color(palette[1]);
@@ -353,8 +378,8 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     for (let local = 0; local < indices.length; local += 1) {
       const particle = indices[local];
-      color.copy(dark).lerp(mid, 0.42 + data.tint[particle] * 0.42);
-      color.lerp(high, 0.045 + data.tint[particle] * 0.07);
+      color.copy(dark).lerp(mid, 0.45 + data.tint[particle] * 0.38);
+      color.lerp(high, 0.035 + data.tint[particle] * 0.055);
       mesh.setColorAt(local, color);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -382,10 +407,9 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     mesh.instanceMatrix.needsUpdate = true;
 
-    const gathering = range(progress, 0.12, 0.3) * (1 - range(progress, 0.42, 0.58));
-    const swirl = range(progress, 0.3, 0.5) * (1 - range(progress, 0.7, 0.84));
-    const finalFlow = range(progress, 0.78, 1.0);
-    const targetRotation = time * (gathering * 0.06 + swirl * 0.12 + finalFlow * 0.025);
+    const braid = range(progress, 0.2, 0.42) * (1 - range(progress, 0.63, 0.76));
+    const preform = range(progress, 0.48, 0.65) * (1 - range(progress, 0.75, 0.86));
+    const targetRotation = time * (braid * 0.08 + preform * 0.035);
     group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.2, delta);
   });
 
@@ -414,41 +438,20 @@ export default function PhotorealGranules({ progressRef }) {
 
   const materials = useMemo(() => [
     new THREE.MeshPhysicalMaterial({
-      color: '#4d8bdd',
-      roughness: 0.27,
+      color: '#2365b4',
+      roughness: 0.31,
       metalness: 0,
-      clearcoat: 0.9,
-      clearcoatRoughness: 0.16,
+      clearcoat: 0.58,
+      clearcoatRoughness: 0.2,
       ior: 1.47,
-      specularIntensity: 0.82,
-      specularColor: new THREE.Color('#e8f3ff'),
-      sheen: 0.16,
-      sheenRoughness: 0.42,
-      sheenColor: new THREE.Color('#5f9ce2'),
-      bumpMap: microTexture,
-      bumpScale: 0.0025,
-      envMapIntensity: 1.18,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      depthTest: true,
-      vertexColors: true,
-    }),
-    new THREE.MeshPhysicalMaterial({
-      color: '#6aa4e8',
-      roughness: 0.24,
-      metalness: 0,
-      clearcoat: 0.94,
-      clearcoatRoughness: 0.13,
-      ior: 1.46,
-      specularIntensity: 0.88,
-      specularColor: new THREE.Color('#f1f7ff'),
-      sheen: 0.2,
-      sheenRoughness: 0.38,
-      sheenColor: new THREE.Color('#78b1ec'),
+      specularIntensity: 0.58,
+      specularColor: new THREE.Color('#9fc8f5'),
+      sheen: 0.1,
+      sheenRoughness: 0.48,
+      sheenColor: new THREE.Color('#397fd0'),
       bumpMap: microTexture,
       bumpScale: 0.0022,
-      envMapIntensity: 1.24,
+      envMapIntensity: 0.86,
       transparent: false,
       opacity: 1,
       depthWrite: true,
@@ -456,17 +459,38 @@ export default function PhotorealGranules({ progressRef }) {
       vertexColors: true,
     }),
     new THREE.MeshPhysicalMaterial({
-      color: '#4f82c7',
-      roughness: 0.32,
+      color: '#3b7bc5',
+      roughness: 0.28,
       metalness: 0,
-      clearcoat: 0.72,
-      clearcoatRoughness: 0.22,
-      ior: 1.47,
-      specularIntensity: 0.74,
-      specularColor: new THREE.Color('#dcecff'),
+      clearcoat: 0.64,
+      clearcoatRoughness: 0.17,
+      ior: 1.46,
+      specularIntensity: 0.62,
+      specularColor: new THREE.Color('#b5d8fb'),
+      sheen: 0.12,
+      sheenRoughness: 0.44,
+      sheenColor: new THREE.Color('#4d91d7'),
       bumpMap: microTexture,
-      bumpScale: 0.0032,
-      envMapIntensity: 1.1,
+      bumpScale: 0.002,
+      envMapIntensity: 0.92,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      vertexColors: true,
+    }),
+    new THREE.MeshPhysicalMaterial({
+      color: '#285f9e',
+      roughness: 0.36,
+      metalness: 0,
+      clearcoat: 0.42,
+      clearcoatRoughness: 0.26,
+      ior: 1.47,
+      specularIntensity: 0.5,
+      specularColor: new THREE.Color('#8bb8e8'),
+      bumpMap: microTexture,
+      bumpScale: 0.0028,
+      envMapIntensity: 0.78,
       transparent: false,
       opacity: 1,
       depthWrite: true,
@@ -477,9 +501,9 @@ export default function PhotorealGranules({ progressRef }) {
   ], [microTexture]);
 
   const palettes = useMemo(() => [
-    ['#2b5f92', '#6596c9', '#b8d6ee'],
-    ['#32699d', '#78a8d7', '#d0e4f4'],
-    ['#295781', '#5f8dbc', '#a9c9e2'],
+    ['#153f73', '#2f71bd', '#7eb5ea'],
+    ['#1a4d82', '#4282c9', '#9bc8ef'],
+    ['#173d68', '#346ca8', '#78aada'],
   ], []);
 
   useEffect(() => () => {
