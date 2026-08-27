@@ -4,12 +4,12 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 
-function AreaLight({ position, color, intensity, width, height, target = [0, 0, 0] }) {
+function AreaLight({ position, color, intensity, width, height, target }) {
   const ref = useRef();
   const targetVector = useMemo(() => new THREE.Vector3(...target), [target]);
 
   useEffect(() => {
-    if (ref.current) ref.current.lookAt(targetVector);
+    ref.current?.lookAt(targetVector);
   }, [targetVector]);
 
   return (
@@ -24,14 +24,9 @@ function AreaLight({ position, color, intensity, width, height, target = [0, 0, 
   );
 }
 
-/**
- * Local, deterministic studio environment. No remote HDRI is required.
- * RoomEnvironment is converted to a PMREM cubemap so the polymer pellets get
- * broad soft-box reflections and a readable Fresnel rim instead of flat blue.
- */
 export default function CinematicEnvironment({ progressRef }) {
   const { gl, scene } = useThree();
-  const lightRigRef = useRef();
+  const rigRef = useRef();
 
   useEffect(() => {
     RectAreaLightUniformsLib.init();
@@ -40,32 +35,29 @@ export default function CinematicEnvironment({ progressRef }) {
     const previousEnvironmentIntensity = scene.environmentIntensity;
     const previousToneMapping = gl.toneMapping;
     const previousExposure = gl.toneMappingExposure;
-    const previousOutputColorSpace = gl.outputColorSpace;
-    const previousShadowEnabled = gl.shadowMap.enabled;
-    const previousShadowType = gl.shadowMap.type;
+    const previousColorSpace = gl.outputColorSpace;
 
     const room = new RoomEnvironment();
     const pmrem = new THREE.PMREMGenerator(gl);
-    const target = pmrem.fromScene(room, 0.035);
+    const target = pmrem.fromScene(room, 0.045);
 
     scene.environment = target.texture;
-    scene.environmentIntensity = 1.15;
-
+    scene.environmentIntensity = 1.02;
     gl.toneMapping = THREE.ACESFilmicToneMapping;
-    gl.toneMappingExposure = 0.92;
+    gl.toneMappingExposure = 1.02;
     gl.outputColorSpace = THREE.SRGBColorSpace;
-    gl.shadowMap.enabled = true;
-    gl.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Shadows are intentionally disabled. The reference relies on glossy studio
+    // reflections and luminous filaments, while realtime shadow maps were one of
+    // the largest unnecessary GPU costs during startup and scrolling.
+    gl.shadowMap.enabled = false;
 
     return () => {
       scene.environment = previousEnvironment;
       scene.environmentIntensity = previousEnvironmentIntensity;
       gl.toneMapping = previousToneMapping;
       gl.toneMappingExposure = previousExposure;
-      gl.outputColorSpace = previousOutputColorSpace;
-      gl.shadowMap.enabled = previousShadowEnabled;
-      gl.shadowMap.type = previousShadowType;
-
+      gl.outputColorSpace = previousColorSpace;
       target.dispose();
       pmrem.dispose();
       if (typeof room.dispose === 'function') room.dispose();
@@ -73,60 +65,58 @@ export default function CinematicEnvironment({ progressRef }) {
   }, [gl, scene]);
 
   useFrame(({ clock }) => {
-    const rig = lightRigRef.current;
-    if (!rig) return;
-
     const p = progressRef.current;
-    // Nearly static studio lights, with a tiny drift so reflections do not look frozen.
-    rig.rotation.y = Math.sin(clock.getElapsedTime() * 0.08) * 0.018 + p * 0.035;
-    scene.environmentIntensity = 1.08 + Math.sin(p * Math.PI) * 0.12;
+    if (rigRef.current) {
+      rigRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.07) * 0.014 + p * 0.02;
+    }
+    scene.environmentIntensity = 1.0 + Math.sin(Math.min(1, p) * Math.PI) * 0.12;
   });
 
   return (
-    <group ref={lightRigRef}>
-      <hemisphereLight intensity={0.32} color="#c7ddff" groundColor="#01040b" />
-      <ambientLight intensity={0.08} color="#476a9d" />
+    <group ref={rigRef}>
+      <hemisphereLight intensity={0.28} color="#d3e6ff" groundColor="#01040a" />
+      <ambientLight intensity={0.055} color="#44658e" />
 
       <AreaLight
-        position={[4.6, 6.8, 6.8]}
+        position={[3.8, 7.4, 6.4]}
+        target={[0, 0.6, 0]}
+        color="#f5fbff"
+        intensity={19}
+        width={5.8}
+        height={8.0}
+      />
+      <AreaLight
+        position={[-5.6, 2.4, 4.4]}
+        target={[0, 0.15, 0]}
+        color="#5e9eff"
+        intensity={9.2}
+        width={4.4}
+        height={6.8}
+      />
+      <AreaLight
+        position={[0.2, 4.8, -5.8]}
         target={[0, 0.35, 0]}
-        color="#eef6ff"
-        intensity={17}
-        width={5.4}
-        height={7.2}
-      />
-      <AreaLight
-        position={[-5.2, 2.6, 4.2]}
-        target={[0, 0.05, 0]}
-        color="#75adff"
-        intensity={8.5}
-        width={4.0}
-        height={6.2}
-      />
-      <AreaLight
-        position={[0.4, 5.0, -5.8]}
-        target={[0, 0.3, 0]}
-        color="#2e72ff"
-        intensity={10.5}
-        width={4.6}
-        height={4.0}
+        color="#2f76ff"
+        intensity={11.5}
+        width={5.0}
+        height={4.4}
       />
 
       <spotLight
-        position={[2.2, 7.5, 7.8]}
-        intensity={14}
-        angle={0.42}
-        penumbra={0.96}
-        distance={20}
+        position={[1.8, 8.6, 6.6]}
+        intensity={13}
+        angle={0.38}
+        penumbra={0.98}
+        distance={22}
         decay={2}
-        color="#ffffff"
+        color="#eaf5ff"
       />
       <pointLight
-        position={[0, -2.8, 2.2]}
-        intensity={7}
-        distance={10}
+        position={[0, -2.2, 1.8]}
+        intensity={6.5}
+        distance={9}
         decay={2}
-        color="#1555c9"
+        color="#1558ca"
       />
     </group>
   );
