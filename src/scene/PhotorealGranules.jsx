@@ -325,10 +325,22 @@ function resolvePosition(data, index, rawProgress, time, position, euler, scaleV
 
   const braid = range(progress, 0.13, 0.31) * (1 - range(progress, 0.5, 0.62));
   const forming = range(progress, 0.4, 0.58) * (1 - range(progress, 0.68, 0.77));
+
+  // Real resin pellets do not continuously spin like coins. Keep their random
+  // initial orientation and add only a very small, slow inertial rock while
+  // they are free-flowing. As they compress/form, even that motion settles.
+  const freeTumble = 1 - range(progress, 0.46, 0.68);
+  const tumbleX = Math.sin(time * (0.34 + data.flutter[index] * 0.045) + phase)
+    * 0.052 * freeTumble;
+  const tumbleY = Math.sin(time * 0.29 + phase * 0.63)
+    * 0.03 * freeTumble;
+  const tumbleZ = Math.cos(time * (0.31 + data.flutter[index] * 0.04) + phase * 0.82)
+    * 0.042 * freeTumble;
+
   euler.set(
-    data.rotation[i3] + time * (0.07 + data.flutter[index] * 0.022),
-    data.rotation[i3 + 1] + braid * 2.2 + forming * 0.65,
-    data.rotation[i3 + 2] + time * (0.05 + data.flutter[index] * 0.018),
+    data.rotation[i3] + tumbleX,
+    data.rotation[i3 + 1] + braid * 0.62 + forming * 0.17 + tumbleY,
+    data.rotation[i3 + 2] + tumbleZ,
   );
 
   // Fusion finishes early so the final product gets a clean visual hold before
@@ -401,8 +413,8 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     const braid = range(progress, 0.14, 0.32) * (1 - range(progress, 0.51, 0.62));
     const preform = range(progress, 0.36, 0.5) * (1 - range(progress, 0.62, 0.72));
-    const targetRotation = time * (braid * 0.08 + preform * 0.035);
-    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.2, delta);
+    const targetRotation = time * (braid * 0.026 + preform * 0.01);
+    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.0, delta);
   });
 
   return (
