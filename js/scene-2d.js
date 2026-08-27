@@ -5,6 +5,7 @@
 (function () {
   const canvas = document.getElementById('scene-canvas');
   if (!canvas) return;
+  canvas.hidden = false;
   const ctx = canvas.getContext('2d');
   const scene = document.querySelector('.scene');
   const steps = [...document.querySelectorAll('.hud__step')];

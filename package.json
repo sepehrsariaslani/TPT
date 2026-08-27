@@ -1,0 +1,24 @@
+{
+  "name": "tpt",
+  "version": "1.0.0",
+  "description": "لندینگ تک‌صفحه‌ای فارسی (RTL) با انیمیشن اسکرول: گرانول‌های پلیمر با اسکرول کردن وارد قیف می‌شوند، ذوب می‌شوند، به داخل قالب تزریق شده و در نهایت به قطعه نهایی تبدیل می‌شوند.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sepehrsariaslani/TPT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sepehrsariaslani/TPT/issues"
+  },
+  "homepage": "https://github.com/sepehrsariaslani/TPT#readme",
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "three": "^0.185.1"
+  }
+}

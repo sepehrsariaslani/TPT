@@ -66,7 +66,8 @@
 <!-- ============ SCROLL SCENE ============ -->
 <section class="scene" id="process">
   <div class="scene__sticky">
-    <canvas id="scene-canvas"></canvas>
+    <div id="scene-3d" class="scene__gl"></div>
+    <canvas id="scene-canvas" hidden></canvas>
 
     <div class="scene__hud">
       <div class="hud__step" data-step="0">
@@ -288,7 +289,24 @@
   </div>
 </footer>
 
-<script src="js/scene.js"></script>
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="js/three-scene.js"></script>
+<script nomodule src="js/scene-2d.js"></script>
+<script>
+  /* اگر مرورگر importmap را پشتیبانی نکند، نسخه دوبعدی اجرا می‌شود */
+  if (!(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) {
+    var s = document.createElement('script'); s.src = 'js/scene-2d.js'; document.body.appendChild(s);
+  }
+</script>
 <script src="js/main.js"></script>
 </body>
 </html>
