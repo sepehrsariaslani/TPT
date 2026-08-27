@@ -84,7 +84,7 @@ function MaterialFeedLights({ progressRef }) {
     const convergence = range(p, 0.065, 0.19) * (1 - range(p, 0.28, 0.42));
     const plasticizing = range(p, 0.2, 0.34) * (1 - range(p, 0.5, 0.6));
     const gateHandoff = range(p, 0.36, 0.445) * (1 - range(p, 0.58, 0.67));
-    const clampCool = range(p, 0.445, 0.56) * (1 - range(p, 0.76, 0.85));
+    const clampCool = range(p, 0.385, 0.54) * (1 - range(p, 0.76, 0.85));
     const hero = range(p, 0.8, 0.92);
 
     if (leftRef.current) {
@@ -108,7 +108,7 @@ function MaterialFeedLights({ progressRef }) {
         + convergence * 1.26
         + plasticizing * 0.82
         + gateHandoff * 1.12
-        + clampCool * 0.3;
+        + clampCool * 0.32;
       centreRef.current.intensity = THREE.MathUtils.damp(
         centreRef.current.intensity,
         processLevel * (1 - hero * 0.9),
@@ -163,13 +163,11 @@ function CameraRig({ progressRef }) {
     const mobile = size.width <= 680;
     const tablet = size.width > 680 && size.width <= 980;
 
-    // Wide overlapping windows make the camera anticipate the next physical
-    // event before the previous one disappears. There is no stage-to-stage snap.
     const feed = 1 - range(p, 0.16, 0.29);
     const convergence = range(p, 0.06, 0.21) * (1 - range(p, 0.3, 0.43));
     const plasticizing = range(p, 0.2, 0.335) * (1 - range(p, 0.5, 0.61));
     const gateHandoff = range(p, 0.355, 0.45) * (1 - range(p, 0.58, 0.69));
-    const clamping = range(p, 0.44, 0.56) * (1 - range(p, 0.66, 0.76));
+    const clamping = range(p, 0.385, 0.53) * (1 - range(p, 0.68, 0.77));
     const cooling = range(p, 0.55, 0.735) * (1 - range(p, 0.79, 0.87));
     const release = range(p, 0.74, 0.845);
     const hero = range(p, 0.805, 0.92);
@@ -188,7 +186,7 @@ function CameraRig({ progressRef }) {
         - convergence * 0.12
         - plasticizing * 0.075
         - gateHandoff * 0.055
-        - clamping * 0.025
+        + clamping * 0.035
         - cooling * 0.04
         - release * 0.04
         - product * 0.16
@@ -199,7 +197,7 @@ function CameraRig({ progressRef }) {
         - convergence * 0.2
         - plasticizing * 0.14
         - gateHandoff * 0.09
-        - clamping * 0.04
+        + clamping * 0.055
         - cooling * 0.06
         - release * 0.05
         + pointer.y * 0.055 * (1 - hero)
@@ -207,15 +205,18 @@ function CameraRig({ progressRef }) {
         - hero * 0.16
         + braid * 0.035;
 
+    // The camera briefly breathes outward while the mould assembly enters so the
+    // guide pillars, cavity/core plates and nozzle all fit in frame. It pushes back
+    // toward the product only after release.
     const targetZ = mobile
       ? 16.2
         + feed * 0.62
         - convergence * 0.35
         - plasticizing * 0.31
-        - gateHandoff * 0.19
-        - clamping * 0.08
-        - cooling * 0.08
-        - product * 0.58
+        - gateHandoff * 0.16
+        + clamping * 0.22
+        - cooling * 0.06
+        - product * 0.54
         - hero * 0.34
         + preform * 0.05
       : tablet
@@ -223,20 +224,20 @@ function CameraRig({ progressRef }) {
           + feed * 0.48
           - convergence * 0.3
           - plasticizing * 0.39
-          - gateHandoff * 0.23
-          - clamping * 0.09
-          - cooling * 0.1
-          - product * 0.66
+          - gateHandoff * 0.2
+          + clamping * 0.2
+          - cooling * 0.08
+          - product * 0.62
           - hero * 0.42
           + preform * 0.06
         : 11.2
           + feed * 0.42
           - convergence * 0.28
           - plasticizing * 0.45
-          - gateHandoff * 0.29
-          - clamping * 0.1
-          - cooling * 0.12
-          - product * 0.57
+          - gateHandoff * 0.24
+          + clamping * 0.22
+          - cooling * 0.1
+          - product * 0.54
           - hero * 0.46
           + preform * 0.07;
 
@@ -248,7 +249,8 @@ function CameraRig({ progressRef }) {
     const targetFov = baseFov
       + feed * (mobile ? 2.1 : tablet ? 1.6 : 1.35)
       - plasticizing * (mobile ? 0.42 : 0.7)
-      - gateHandoff * (mobile ? 0.14 : 0.26)
+      - gateHandoff * (mobile ? 0.12 : 0.22)
+      + clamping * (mobile ? 0.65 : tablet ? 0.42 : 0.3)
       - hero * (mobile ? 0.2 : 0.42);
     const nextFov = THREE.MathUtils.damp(camera.fov, targetFov, 3.7, delta);
     if (Math.abs(nextFov - camera.fov) > 0.001) {
@@ -262,6 +264,7 @@ function CameraRig({ progressRef }) {
         - convergence * 0.18
         - plasticizing * 0.09
         - gateHandoff * 0.045
+        + clamping * 0.025
         - cooling * 0.025
         - product * 0.07
         - hero * 0.035
@@ -270,6 +273,7 @@ function CameraRig({ progressRef }) {
         - convergence * 0.28
         - plasticizing * 0.17
         - gateHandoff * 0.075
+        + clamping * 0.035
         - cooling * 0.035
         - product * 0.13
         - hero * 0.055;
