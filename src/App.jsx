@@ -11,46 +11,38 @@ const smooth = (t) => {
   return x * x * (3 - 2 * x);
 };
 
+// Four narrative beats only. The mechanical micro-events still happen inside
+// these windows, but the user does not have to scroll through six separate cards.
 const STAGES = [
   {
     number: '01',
-    code: 'MATERIAL FEED',
-    title: 'خوراک‌دهی مواد اولیه',
-    body: 'گرانول ترموپلاستیک، پس از آماده‌سازی و در صورت نیاز خشک‌کردن، از هاپر وارد واحد تزریق می‌شود و برای سیکل بعدی در دسترس مارپیچ قرار می‌گیرد.',
+    code: 'GRANULE FEED',
+    title: 'ورود و هدایت گرانول',
+    body: 'گرانول‌های ترموپلاستیک از دو سمت وارد مسیر خوراک‌دهی می‌شوند، به مرکز نزدیک می‌شوند و برای ورود به واحد پلاستیک‌سازی آماده می‌گردند.',
   },
   {
     number: '02',
     code: 'PLASTICIZING',
-    title: 'ذوب و پلاستیک‌سازی',
-    body: 'مارپیچ رفت‌وبرگشتی داخل سیلندر گرم می‌چرخد؛ گرانول‌ها به جلو منتقل، ذوب و همگن می‌شوند و حجم شات در جلوی مارپیچ شکل می‌گیرد.',
+    title: 'نرم‌شدن و تشکیل مذاب',
+    body: 'در واحد تزریق، حرکت مارپیچ و حرارت سیلندر دانه‌ها را فشرده، ذوب و همگن می‌کند؛ جریان مذاب پیوسته به سمت نازل و گیت هدایت می‌شود.',
   },
   {
     number: '03',
-    code: 'CLAMPING',
-    title: 'بستن و قفل‌کردن قالب',
-    body: 'دو نیمه‌ی قالب پیش از تزریق کاملاً بسته می‌شوند و واحد گیره نیروی لازم را اعمال می‌کند تا قالب در برابر فشار تزریق باز نشود.',
+    code: 'MOLD / INJECTION',
+    title: 'بستن قالب، تزریق و خنک‌کاری',
+    body: 'دو نیمه‌ی قالب روی هم قفل می‌شوند، نازل روی بوش راهگاه می‌نشیند و مذاب از sprue و gate وارد حفره می‌شود؛ سپس فشار نگهدار و خنک‌کاری قطعه را پایدار می‌کنند.',
   },
   {
     number: '04',
-    code: 'INJECTION / FILL',
-    title: 'تزریق و پرشدن حفره',
-    body: 'مارپیچ به جلو حرکت می‌کند و مذاب از نازل و سیستم تغذیه‌ی قالب، از راهگاه و گیت، با سرعت و فشار کنترل‌شده وارد حفره‌ی قطعه می‌شود.',
-  },
-  {
-    number: '05',
-    code: 'HOLD / COOL',
-    title: 'فشار نگهدار و خنک‌کاری',
-    body: 'پس از پرشدن حفره، فشار نگهدار برای جبران جمع‌شدگی اعمال می‌شود. سپس کانال‌های خنک‌کاری حرارت را می‌گیرند تا قطعه به استحکام لازم برسد.',
-  },
-  {
-    number: '06',
-    code: 'MOLD OPEN / EJECT',
-    title: 'بازشدن قالب و خروج قطعه',
-    body: 'وقتی قطعه به اندازه‌ی کافی سرد و پایدار شد، قالب باز می‌شود و سیستم پران قطعه را خارج می‌کند؛ هم‌زمان دستگاه برای شات بعدی آماده می‌شود.',
+    code: 'OPEN / EJECT / HERO',
+    title: 'بازشدن قالب و نمایش قطعه',
+    body: 'پس از رسیدن قطعه به استحکام کافی، نازل عقب می‌رود، قالب باز می‌شود و پین‌های پران قطعه را آزاد می‌کنند؛ در پایان فقط محصول نهایی در نور استودیویی باقی می‌ماند.',
   },
 ];
 
-const STAGE_EDGES = [0, 0.11, 0.24, 0.39, 0.54, 0.72, 1];
+// These edges deliberately match the current 3D events:
+// feed -> melt -> mould/injection/cooling -> release/hero.
+const STAGE_EDGES = [0, 0.205, 0.405, 0.745, 1];
 
 function BrandMark() {
   return (
@@ -117,12 +109,10 @@ export default function App() {
   }, []);
 
   const phase = useMemo(() => {
-    if (uiProgress < STAGE_EDGES[1]) return 0;
-    if (uiProgress < STAGE_EDGES[2]) return 1;
-    if (uiProgress < STAGE_EDGES[3]) return 2;
-    if (uiProgress < STAGE_EDGES[4]) return 3;
-    if (uiProgress < STAGE_EDGES[5]) return 4;
-    return 5;
+    for (let index = 0; index < STAGES.length; index += 1) {
+      if (uiProgress < STAGE_EDGES[index + 1]) return index;
+    }
+    return STAGES.length - 1;
   }, [uiProgress]);
 
   const activeStage = STAGES[phase];
@@ -132,8 +122,9 @@ export default function App() {
 
   const introFade = 1 - smooth(uiProgress / 0.075);
   const stagePanelFade = smooth((uiProgress - 0.055) / 0.05);
-  const productMoment = smooth((uiProgress - 0.56) / 0.08) * (1 - smooth((uiProgress - 0.96) / 0.035));
-  const finalFade = smooth((uiProgress - 0.73) / 0.055);
+  const productMoment = smooth((uiProgress - 0.79) / 0.055)
+    * (1 - smooth((uiProgress - 0.97) / 0.025));
+  const finalFade = smooth((uiProgress - 0.84) / 0.055);
 
   return (
     <div className="site-shell">
@@ -219,7 +210,7 @@ export default function App() {
                 تا قطعه‌ی نهایی.
               </h1>
               <p className="hero-copy__body">
-                با اسکرول، مراحل واقعی یک سیکل تزریق پلاستیک را دنبال کنید؛ از ورود گرانول به هاپر و پلاستیک‌سازی تا تزریق، خنک‌کاری و خروج قطعه از قالب.
+                با اسکرول، چهار لحظه‌ی اصلی این سیکل را دنبال کنید؛ ورود ماده، پلاستیک‌سازی، شکل‌گیری داخل قالب و در نهایت خروج قطعه‌ی نهایی.
               </p>
             </div>
 
@@ -264,7 +255,7 @@ export default function App() {
             </div>
 
             <div className="corner-data corner-data--left" aria-hidden="true">
-              <span>PELLET → PART</span>
+              <span>PELLET → MOULD → PART</span>
               <b>{String(Math.round(uiProgress * 100)).padStart(3, '0')}</b>
             </div>
             <div className="corner-data corner-data--right" aria-hidden="true">
@@ -273,7 +264,7 @@ export default function App() {
             </div>
 
             <div className="outro-cue" style={{ opacity: finalFade }}>
-              <span>قطعه آماده‌ی خروج از قالب است — ادامه دهید</span>
+              <span>قالب باز شده و قطعه‌ی نهایی آماده‌ی نمایش است — ادامه دهید</span>
               <ArrowDown />
             </div>
           </div>
@@ -288,12 +279,13 @@ export default function App() {
             </div>
             <div className="product-section__copy">
               <p>
-                در تزریق پلاستیک، گرانول داخل سیلندر گرم پلاستیک‌سازی می‌شود، شات مذاب با حرکت رو به جلوی مارپیچ وارد قالب بسته می‌شود و پس از مرحله‌ی فشار نگهدار و خنک‌کاری، قطعه‌ی جامد از قالب خارج می‌شود.
+                در تزریق پلاستیک، گرانول داخل سیلندر گرم پلاستیک‌سازی می‌شود، شات مذاب از نازل و گیت وارد قالب بسته می‌شود و پس از پرشدن، فشار نگهدار و خنک‌کاری، قطعه‌ی جامد با بازشدن قالب و عملکرد سیستم پران آزاد می‌شود.
               </p>
               <div className="mini-specs">
-                <span><b>01</b> Hopper / Screw</span>
-                <span><b>02</b> Injection / Hold</span>
-                <span><b>03</b> Cool / Eject</span>
+                <span><b>01</b> Feed</span>
+                <span><b>02</b> Plasticize</span>
+                <span><b>03</b> Mould / Fill</span>
+                <span><b>04</b> Eject</span>
               </div>
             </div>
           </div>
