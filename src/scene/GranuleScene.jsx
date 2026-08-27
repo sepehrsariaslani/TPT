@@ -1,6 +1,6 @@
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import ErrorBoundary from '../ErrorBoundary.jsx';
 import * as THREE from 'three';
 import RealisticGranules from './RealisticGranules.jsx';
@@ -326,17 +326,10 @@ function CameraRig({ progressRef }) {
  * به‌جای اینکه کل صفحه از کار بیفتد.
  */
 function PostFX() {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
   return (
-    <ErrorBoundary
-      scope="postprocessing"
-      silent
-      fallback={null}
-      onError={() => setFailed(true)}
-    >
+    <ErrorBoundary scope="postprocessing" silent fallback={null}>
       <EffectComposer multisampling={0}>
-        <Bloom intensity={1.35} luminanceThreshold={0.22} luminanceSmoothing={0.66} mipmapBlur />
+        <Bloom intensity={0.98} luminanceThreshold={0.38} luminanceSmoothing={0.72} mipmapBlur />
         <Vignette eskil={false} offset={0.12} darkness={0.82} />
       </EffectComposer>
     </ErrorBoundary>
@@ -372,10 +365,7 @@ export default function GranuleScene({ progressRef }) {
       <CapModel progressRef={progressRef} />
       <CameraRig progressRef={progressRef} />
 
-      <EffectComposer multisampling={0}>
-        <Bloom intensity={0.98} luminanceThreshold={0.38} luminanceSmoothing={0.72} mipmapBlur />
-        <Vignette eskil={false} offset={0.12} darkness={0.82} />
-      </EffectComposer>
+      <PostFX />
     </>
   );
 }
