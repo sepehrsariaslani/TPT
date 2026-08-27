@@ -110,9 +110,9 @@ function getQualityCount() {
   const width = window.innerWidth;
   const cores = navigator.hardwareConcurrency || 6;
 
-  if (width < 680) return cores <= 4 ? 560 : 760;
-  if (width < 1100) return cores <= 4 ? 820 : 1080;
-  return cores <= 4 ? 1100 : 1540;
+  if (width < 680) return cores <= 4 ? 520 : 720;
+  if (width < 1100) return cores <= 4 ? 800 : 1040;
+  return cores <= 4 ? 1080 : 1500;
 }
 
 function write3(target, i3, x, y, z) {
@@ -121,7 +121,7 @@ function write3(target, i3, x, y, z) {
   target[i3 + 2] = z;
 }
 
-function buildParticleData(count) {
+function buildParticleData(count, compactViewport = false) {
   const random = seededRandom(918273);
   const stream = new Float32Array(count * 3);
   const funnel = new Float32Array(count * 3);
@@ -140,12 +140,16 @@ function buildParticleData(count) {
   const fuseOffset = new Float32Array(count);
   const variant = new Uint8Array(count);
 
+  const laneWidth = compactViewport ? 2.72 : 3.7;
+  const funnelScale = compactViewport ? 0.82 : 1;
+  const verticalScale = compactViewport ? 0.9 : 1;
+
   for (let i = 0; i < count; i += 1) {
     const i3 = i * 3;
     const t = random();
     const lane = i % STREAM_COUNT;
     const lane01 = lane / (STREAM_COUNT - 1);
-    const laneX = (lane01 - 0.5) * 3.7;
+    const laneX = (lane01 - 0.5) * laneWidth;
     const laneAngle = (lane / STREAM_COUNT) * TAU - Math.PI * 0.5;
     const localPhase = random() * TAU;
 
@@ -154,47 +158,42 @@ function buildParticleData(count) {
     tint[i] = random();
     flutter[i] = 0.46 + random() * 0.7;
     speed[i] = 0.78 + random() * 0.44;
-    lag[i] = (random() - 0.5) * 0.022;
-    fuseOffset[i] = (random() - 0.5) * 0.052;
+    lag[i] = (random() - 0.5) * 0.018;
+    fuseOffset[i] = (random() - 0.5) * 0.038;
 
     const pick = random();
     variant[i] = pick < 0.68 ? 0 : pick < 0.95 ? 1 : 2;
 
-    // Stage 01 — seven clearly separated vertical pellet streams.
-    // They are made only of pellets: there are no rendered guide lines.
     write3(
       stream,
       i3,
-      laneX + (random() - 0.5) * 0.22,
-      9.1 - t * 18.0 + (random() - 0.5) * 0.22,
-      Math.sin(lane * 1.7) * 0.42 + (random() - 0.5) * 0.22,
+      laneX + (random() - 0.5) * 0.2,
+      (9.1 - t * 18.0) * verticalScale + (random() - 0.5) * 0.2,
+      Math.sin(lane * 1.7) * (compactViewport ? 0.3 : 0.42) + (random() - 0.5) * 0.18,
     );
 
-    // Stage 02 — the separate streams bend inward and begin to braid.
     const funnelTurns = 3.15 + lane * 0.055;
     const funnelAngle = laneAngle + t * TAU * funnelTurns + localPhase * 0.035;
-    const funnelRadius = 3.65 - t * 2.15 + Math.sin(t * TAU * 1.8 + lane) * 0.09;
+    const funnelRadius = (3.65 - t * 2.15 + Math.sin(t * TAU * 1.8 + lane) * 0.09) * funnelScale;
     write3(
       funnel,
       i3,
       Math.cos(funnelAngle) * funnelRadius,
-      5.8 - t * 10.2 + (random() - 0.5) * 0.18,
+      (5.8 - t * 10.2) * verticalScale + (random() - 0.5) * 0.16,
       Math.sin(funnelAngle) * funnelRadius * 0.82,
     );
 
-    // Stage 03 — the braid tightens into a dense, shallow tornado made by pellets.
     const tightTurns = 4.35 + lane * 0.07;
     const tightAngle = laneAngle + t * TAU * tightTurns + localPhase * 0.04;
-    const tightRadius = 3.0 - t * 1.85 + Math.sin(t * TAU * 2.4 + localPhase) * 0.08;
+    const tightRadius = (3.0 - t * 1.85 + Math.sin(t * TAU * 2.4 + localPhase) * 0.08) * funnelScale;
     write3(
       compressed,
       i3,
       Math.cos(tightAngle) * tightRadius,
-      4.15 - t * 6.9 + (random() - 0.5) * 0.16,
+      (4.15 - t * 6.9) * verticalScale + (random() - 0.5) * 0.14,
       Math.sin(tightAngle) * tightRadius * 0.84,
     );
 
-    // Stage 04 — the streams flatten into concentric material bands above the cap.
     const band = Math.floor(random() * 8);
     const bandRadius = 0.48 + band * 0.29 + random() * 0.18;
     const bandAngle = localPhase + t * TAU * (1.15 + (band % 3) * 0.16);
@@ -202,11 +201,10 @@ function buildParticleData(count) {
       preform,
       i3,
       Math.cos(bandAngle) * bandRadius,
-      0.83 + (band - 3.5) * 0.018 + (random() - 0.5) * 0.055,
+      0.83 + (band - 3.5) * 0.018 + (random() - 0.5) * 0.05,
       Math.sin(bandAngle) * bandRadius * 0.96,
     );
 
-    // Stage 05 — each pellet gets a real target on the product surface.
     const surfacePick = random();
     if (surfacePick < 0.74) {
       const radius = Math.sqrt(random()) * 2.27;
@@ -214,9 +212,6 @@ function buildParticleData(count) {
       const sx = Math.cos(a) * radius;
       const sz = Math.sin(a) * radius;
       write3(surface, i3, sx, 0.625 + random() * 0.035, sz);
-
-      // Absorption target lies just below the top skin. Pellets reach it only
-      // while simultaneously shrinking, so the material appears to fuse.
       write3(absorb, i3, sx, 0.475 - random() * 0.035, sz);
     } else {
       const a = random() * TAU;
@@ -281,71 +276,68 @@ function resolvePosition(data, index, rawProgress, time, position, euler, scaleV
 
   let from = data.stream;
   let to = data.funnel;
-  let mix = range(progress, 0.1, 0.29);
-  let turbulence = Math.sin(mix * Math.PI) * 0.12;
+  let mix = range(progress, 0.07, 0.2);
+  let turbulence = Math.sin(mix * Math.PI) * 0.11;
 
-  if (progress >= 0.29 && progress < 0.49) {
+  if (progress >= 0.2 && progress < 0.35) {
     from = data.funnel;
     to = data.compressed;
-    mix = range(progress, 0.29, 0.49);
-    turbulence = Math.sin(mix * Math.PI) * 0.16;
-  } else if (progress >= 0.49 && progress < 0.67) {
+    mix = range(progress, 0.2, 0.35);
+    turbulence = Math.sin(mix * Math.PI) * 0.15;
+  } else if (progress >= 0.35 && progress < 0.5) {
     from = data.compressed;
     to = data.preform;
-    mix = range(progress, 0.49, 0.67);
-    turbulence = Math.sin(mix * Math.PI) * 0.11;
-  } else if (progress >= 0.67 && progress < 0.82) {
+    mix = range(progress, 0.35, 0.5);
+    turbulence = Math.sin(mix * Math.PI) * 0.095;
+  } else if (progress >= 0.5 && progress < 0.63) {
     from = data.preform;
     to = data.surface;
-    mix = range(progress, 0.67, 0.82);
-    turbulence = Math.sin(mix * Math.PI) * 0.055;
-  } else if (progress >= 0.82) {
+    mix = range(progress, 0.5, 0.63);
+    turbulence = Math.sin(mix * Math.PI) * 0.045;
+  } else if (progress >= 0.63) {
     from = data.surface;
     to = data.absorb;
-    mix = range(progress, 0.82, 0.94);
-    turbulence = 0.008;
+    mix = range(progress, 0.63, 0.76);
+    turbulence = 0.006;
   }
 
-  // At the beginning the seven columns keep moving downward, so they read as
-  // real material feeds instead of a frozen cloud.
   let fromY = from[i3 + 1];
-  if (progress < 0.24) {
-    const movingT = (data.pathT[index] + time * 0.028 * data.speed[index]) % 1;
-    const live = 1 - range(progress, 0.12, 0.24);
+  if (progress < 0.18) {
+    const movingT = (data.pathT[index] + time * 0.032 * data.speed[index]) % 1;
+    const live = 1 - range(progress, 0.09, 0.18);
     const animatedY = 9.1 - movingT * 18.0;
     fromY = THREE.MathUtils.lerp(fromY, animatedY, live);
   }
 
-  const settle = range(progress, 0.64, 0.84);
-  const micro = (0.01 + data.flutter[index] * 0.005) * (1 - settle * 0.86);
+  const settle = range(progress, 0.52, 0.7);
+  const micro = (0.009 + data.flutter[index] * 0.0045) * (1 - settle * 0.88);
 
   position.set(
     THREE.MathUtils.lerp(from[i3], to[i3], mix)
-      + Math.cos(phase + time * 0.66) * turbulence
+      + Math.cos(phase + time * 0.68) * turbulence
       + Math.sin(time * 1.2 + phase) * micro,
     THREE.MathUtils.lerp(fromY, to[i3 + 1], mix)
-      + Math.sin(phase * 0.71 + time * 0.84) * turbulence * 0.08,
+      + Math.sin(phase * 0.71 + time * 0.86) * turbulence * 0.08,
     THREE.MathUtils.lerp(from[i3 + 2], to[i3 + 2], mix)
-      + Math.sin(phase + time * 0.63) * turbulence * 0.74
+      + Math.sin(phase + time * 0.64) * turbulence * 0.74
       + Math.cos(time * 1.1 + phase) * micro,
   );
 
-  const braid = range(progress, 0.18, 0.42) * (1 - range(progress, 0.62, 0.76));
-  const forming = range(progress, 0.55, 0.76) * (1 - range(progress, 0.82, 0.9));
+  const braid = range(progress, 0.13, 0.31) * (1 - range(progress, 0.5, 0.62));
+  const forming = range(progress, 0.4, 0.58) * (1 - range(progress, 0.68, 0.77));
   euler.set(
     data.rotation[i3] + time * (0.07 + data.flutter[index] * 0.022),
     data.rotation[i3 + 1] + braid * 2.2 + forming * 0.65,
     data.rotation[i3 + 2] + time * (0.05 + data.flutter[index] * 0.018),
   );
 
-  // Final fusion: nothing is suddenly hidden. Each pellet is staggered,
-  // approaches the skin, compresses, and is gradually absorbed into the solid.
-  // By ~92% scroll the product is visually clean and can hold before section 2.
-  const fuseStart = 0.755 + data.fuseOffset[index];
-  const fuseEnd = 0.9 + data.fuseOffset[index] * 0.28;
+  // Fusion finishes early so the final product gets a clean visual hold before
+  // the sticky experience releases into the next section.
+  const fuseStart = 0.56 + data.fuseOffset[index];
+  const fuseEnd = 0.73 + data.fuseOffset[index] * 0.2;
   const fuse = range(rawProgress, fuseStart, fuseEnd);
-  const compact = THREE.MathUtils.lerp(1, 0.82, range(progress, 0.68, 0.8));
-  const fusionScale = THREE.MathUtils.lerp(1, 0.018, fuse);
+  const compact = THREE.MathUtils.lerp(1, 0.8, range(progress, 0.52, 0.65));
+  const fusionScale = THREE.MathUtils.lerp(1, 0.015, fuse);
   const pulse = 1 + Math.sin(time * 1.0 + phase) * 0.002 * (1 - fuse);
 
   scaleVector.set(
@@ -407,8 +399,8 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     mesh.instanceMatrix.needsUpdate = true;
 
-    const braid = range(progress, 0.2, 0.42) * (1 - range(progress, 0.63, 0.76));
-    const preform = range(progress, 0.48, 0.65) * (1 - range(progress, 0.75, 0.86));
+    const braid = range(progress, 0.14, 0.32) * (1 - range(progress, 0.51, 0.62));
+    const preform = range(progress, 0.36, 0.5) * (1 - range(progress, 0.62, 0.72));
     const targetRotation = time * (braid * 0.08 + preform * 0.035);
     group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.2, delta);
   });
@@ -426,7 +418,10 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
 export default function PhotorealGranules({ progressRef }) {
   const count = useMemo(getQualityCount, []);
-  const data = useMemo(() => buildParticleData(count), [count]);
+  const compactViewport = useMemo(() => (
+    typeof window !== 'undefined' && window.innerWidth < 680
+  ), []);
+  const data = useMemo(() => buildParticleData(count, compactViewport), [count, compactViewport]);
   const microTexture = useMemo(() => createMicroTexture(), []);
   const geometries = useMemo(() => [0, 1, 2].map((type) => makePelletGeometry(type)), []);
 
