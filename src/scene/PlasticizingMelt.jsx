@@ -25,19 +25,25 @@ function makeMeltCurve(index, compact = false) {
   const points = [];
   const phase = index * (TAU / 3) + (index === 1 ? 0.28 : -0.16);
   const radialScale = compact ? 0.78 : 1;
-  const verticalScale = compact ? 0.91 : 1;
+  const verticalScale = compact ? 0.93 : 1;
 
-  for (let step = 0; step <= 18; step += 1) {
-    const t = step / 18;
+  // All three softened streams now terminate at the same centre gate. This is
+  // the continuity bridge between plasticizing and cavity fill: material never
+  // fades in one place and reappears somewhere else.
+  for (let step = 0; step <= 22; step += 1) {
+    const t = step / 22;
     const eased = smooth(t);
-    const radius = THREE.MathUtils.lerp(2.38, 0.64, eased) * radialScale;
-    const turns = 1.04 + index * 0.065;
-    const angle = phase + t * TAU * turns + Math.sin(t * Math.PI) * (index - 1) * 0.09;
-    const x = Math.cos(angle) * radius;
-    const y = THREE.MathUtils.lerp(4.0, -1.3, t) * verticalScale
-      + Math.sin(t * Math.PI * 2 + phase) * 0.07;
-    const z = Math.sin(angle) * radius * 0.78
-      + Math.cos(t * Math.PI * 1.55 + phase) * 0.055;
+    const gatePull = smooth(range(t, 0.58, 1));
+    const radius = THREE.MathUtils.lerp(2.38, 0.075, eased) * radialScale;
+    const turns = 0.92 + index * 0.05;
+    const angle = phase
+      + t * TAU * turns
+      + Math.sin(t * Math.PI) * (index - 1) * 0.075;
+    const x = Math.cos(angle) * radius * (1 - gatePull * 0.12);
+    const y = THREE.MathUtils.lerp(4.0, 0.48, t) * verticalScale
+      + Math.sin(t * Math.PI * 2 + phase) * 0.055 * (1 - gatePull);
+    const z = Math.sin(angle) * radius * THREE.MathUtils.lerp(0.78, 0.36, gatePull)
+      + Math.cos(t * Math.PI * 1.45 + phase) * 0.045 * (1 - gatePull);
     points.push(new THREE.Vector3(x, y, z));
   }
 
@@ -113,18 +119,18 @@ export default function PlasticizingMelt({ progressRef }) {
   const tubes = useMemo(
     () => curves.map((curve, index) => new THREE.TubeGeometry(
       curve,
-      compact ? 56 : 82,
-      (compact ? 0.145 : 0.175) + index * 0.012,
+      compact ? 62 : 92,
+      (compact ? 0.14 : 0.17) + index * 0.011,
       compact ? 8 : 10,
       false,
     )),
     [curves, compact],
   );
   const blobGeometry = useMemo(
-    () => new THREE.SphereGeometry(0.205, compact ? 12 : 16, compact ? 8 : 12),
+    () => new THREE.SphereGeometry(0.2, compact ? 12 : 16, compact ? 8 : 12),
     [compact],
   );
-  const blobData = useMemo(() => buildBlobData(compact ? 46 : 82), [compact]);
+  const blobData = useMemo(() => buildBlobData(compact ? 48 : 86), [compact]);
 
   const meltMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: coldColor.clone(),
@@ -133,14 +139,14 @@ export default function PlasticizingMelt({ progressRef }) {
     clearcoat: 0.7,
     clearcoatRoughness: 0.15,
     ior: 1.47,
-    specularIntensity: 0.74,
+    specularIntensity: 0.72,
     specularColor: new THREE.Color('#c8e0f7'),
-    sheen: 0.05,
-    sheenRoughness: 0.42,
+    sheen: 0.045,
+    sheenRoughness: 0.44,
     sheenColor: new THREE.Color('#2e78bd'),
     bumpMap: meltTexture,
-    bumpScale: 0.0015,
-    envMapIntensity: 1.0,
+    bumpScale: 0.00145,
+    envMapIntensity: 0.98,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -154,9 +160,9 @@ export default function PlasticizingMelt({ progressRef }) {
     clearcoat: 0.82,
     clearcoatRoughness: 0.12,
     ior: 1.47,
-    specularIntensity: 0.76,
+    specularIntensity: 0.74,
     specularColor: new THREE.Color('#d7e9f9'),
-    envMapIntensity: 1.06,
+    envMapIntensity: 1.02,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -187,89 +193,111 @@ export default function PlasticizingMelt({ progressRef }) {
 
     const p = progressRef.current;
     const time = clock.getElapsedTime();
-    const soften = range(p, 0.215, 0.31);
-    const plasticized = range(p, 0.285, 0.425);
-    const handoff = range(p, 0.455, 0.565);
-    const visibility = soften * (1 - handoff);
+    const soften = range(p, 0.205, 0.305);
+    const plasticized = range(p, 0.275, 0.425);
+    const injectionTakeover = range(p, 0.385, 0.535);
+    const drain = range(p, 0.415, 0.555);
+    const fadeOut = range(p, 0.535, 0.595);
+    const visibility = soften * (1 - fadeOut);
 
     group.visible = visibility > 0.003;
     if (!group.visible) return;
 
-    // Reveal the melt progressively along the material path. This removes the
-    // feeling of three pre-existing tubes suddenly fading in and instead makes
-    // the liquid phase visibly grow out of the softening pellet stream.
+    // Grow each liquid path from the softened pellets, then drain its upstream
+    // section while keeping the gate-side tail alive. This makes the eye follow
+    // one uninterrupted mass into the injection point.
     const fills = [
-      range(p, 0.215, 0.335),
-      range(p, 0.225, 0.345),
-      range(p, 0.245, 0.385),
+      range(p, 0.205, 0.33),
+      range(p, 0.215, 0.34),
+      range(p, 0.235, 0.375),
     ];
     tubes.forEach((geometry, index) => {
       if (!geometry.index) return;
-      const drawCount = Math.floor((geometry.index.count * fills[index]) / 3) * 3;
-      geometry.setDrawRange(0, Math.max(0, drawCount));
+      const total = geometry.index.count;
+      const filled = Math.floor((total * fills[index]) / 3) * 3;
+      const trimRatio = THREE.MathUtils.lerp(0, 0.72, drain);
+      const start = Math.floor((filled * trimRatio) / 3) * 3;
+      const count = Math.max(0, filled - start);
+      geometry.setDrawRange(start, count);
     });
 
-    // The visual emphasis moves from distinct soft beads to a continuous,
-    // glossy polymer mass. No emissive glow is used; all highlights are physical.
-    meltMaterial.opacity = visibility * (0.42 + plasticized * 0.24);
-    blobMaterial.opacity = visibility * (0.5 + plasticized * 0.27);
+    meltMaterial.opacity = visibility
+      * (0.43 + plasticized * 0.23)
+      * (1 - drain * 0.16);
+    blobMaterial.opacity = visibility
+      * (0.5 + plasticized * 0.26)
+      * (1 - drain * 0.28);
     meltMaterial.color.lerpColors(coldColor, hotColor, plasticized);
     blobMaterial.color.lerpColors(coldBlobColor, hotBlobColor, plasticized);
     meltMaterial.roughness = THREE.MathUtils.lerp(0.28, 0.145, plasticized);
-    meltMaterial.clearcoat = THREE.MathUtils.lerp(0.58, 0.92, plasticized);
-    meltMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.19, 0.08, plasticized);
+    meltMaterial.clearcoat = THREE.MathUtils.lerp(0.58, 0.91, plasticized);
+    meltMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.19, 0.082, plasticized);
     blobMaterial.roughness = THREE.MathUtils.lerp(0.26, 0.14, plasticized);
-    blobMaterial.clearcoat = THREE.MathUtils.lerp(0.68, 0.9, plasticized);
+    blobMaterial.clearcoat = THREE.MathUtils.lerp(0.68, 0.88, plasticized);
 
-    const breathe = 1 + Math.sin(time * 0.46) * 0.0055 * visibility;
+    const breathe = 1 + Math.sin(time * 0.42) * 0.0045 * visibility * (1 - drain);
     const targetScale = THREE.MathUtils.lerp(0.86, 1, soften) * breathe;
-    group.scale.x = THREE.MathUtils.damp(group.scale.x, targetScale, 4.8, delta);
+    group.scale.x = THREE.MathUtils.damp(
+      group.scale.x,
+      targetScale * THREE.MathUtils.lerp(1, 0.92, drain),
+      5,
+      delta,
+    );
     group.scale.y = THREE.MathUtils.damp(
       group.scale.y,
       THREE.MathUtils.lerp(0.9, 1, soften),
-      4.8,
+      5,
       delta,
     );
-    group.scale.z = THREE.MathUtils.damp(group.scale.z, targetScale, 4.8, delta);
+    group.scale.z = THREE.MathUtils.damp(
+      group.scale.z,
+      targetScale * THREE.MathUtils.lerp(1, 0.92, drain),
+      5,
+      delta,
+    );
 
-    // Keep the polymer mass almost locked in space. The only motion is a tiny
-    // viscous drift, so this never reads as another vortex effect.
+    // Almost no global rotation: the material should read as viscous mass under
+    // pressure, not a vortex. Rotation dies completely as injection takes over.
     group.rotation.y = THREE.MathUtils.damp(
       group.rotation.y,
-      Math.sin(time * 0.15) * 0.006 * visibility,
-      3.5,
+      Math.sin(time * 0.14) * 0.005 * visibility * (1 - injectionTakeover),
+      3.8,
       delta,
     );
 
     for (let i = 0; i < blobData.length; i += 1) {
       const item = blobData[i];
       const curve = curves[item.lane];
-      const localSoft = range(p, 0.215 + item.delay, 0.305 + item.delay);
-      const localMerge = range(p, 0.27 + item.delay * 0.5, 0.405 + item.delay * 0.35);
-      const flowT = (item.t + time * 0.0048 * item.speed * visibility) % 1;
-      const t = clamp01(flowT * 0.96 + 0.02);
+      const localSoft = range(p, 0.205 + item.delay, 0.3 + item.delay);
+      const localMerge = range(p, 0.265 + item.delay * 0.45, 0.405 + item.delay * 0.3);
+      const baseFlowT = (item.t + time * 0.0046 * item.speed * visibility) % 1;
+      const gateTarget = 0.91 + item.t * 0.075;
+      const t = clamp01(THREE.MathUtils.lerp(baseFlowT * 0.96 + 0.02, gateTarget, drain));
 
       curve.getPointAt(t, position);
       curve.getTangentAt(t, tangent).normalize();
       quaternion.setFromUnitVectors(baseAxis, tangent);
 
-      const lateral = Math.sin(item.phase + time * 0.18)
+      const lateral = Math.sin(item.phase + time * 0.16)
         * item.offset
-        * (1 - localMerge * 0.74);
+        * (1 - localMerge * 0.76)
+        * (1 - drain * 0.9);
       position.x += Math.cos(item.phase) * lateral;
       position.z += Math.sin(item.phase) * lateral;
 
       const neck = 0.8 + Math.sin(t * Math.PI) * 0.28;
       const merge = THREE.MathUtils.lerp(0.72, 1.03, localMerge);
       const appear = 0.2 + localSoft * 0.8;
-      const handoffScale = 1 - handoff * 0.38;
+      const drainXZ = THREE.MathUtils.lerp(1, 0.34, drain);
+      const drainY = THREE.MathUtils.lerp(1, 1.32, drain);
+      const finalScale = 1 - fadeOut * 0.82;
 
       helper.position.copy(position);
       helper.quaternion.copy(quaternion);
       helper.scale.set(
-        item.scale * neck * 0.72 * merge * appear * handoffScale,
-        item.scale * (1.08 + localMerge * 0.55) * item.stretch * appear * handoffScale,
-        item.scale * neck * 0.68 * merge * appear * handoffScale,
+        item.scale * neck * 0.72 * merge * appear * drainXZ * finalScale,
+        item.scale * (1.08 + localMerge * 0.55) * item.stretch * appear * drainY * finalScale,
+        item.scale * neck * 0.68 * merge * appear * drainXZ * finalScale,
       );
       helper.updateMatrix();
       blobs.setMatrixAt(i, helper.matrix);
@@ -277,10 +305,25 @@ export default function PlasticizingMelt({ progressRef }) {
     blobs.instanceMatrix.needsUpdate = true;
 
     if (centreLightRef.current) {
+      const targetIntensity = visibility
+        * (0.42 + plasticized * 0.74 + injectionTakeover * 0.42)
+        * (1 - fadeOut * 0.7);
       centreLightRef.current.intensity = THREE.MathUtils.damp(
         centreLightRef.current.intensity,
-        visibility * (0.45 + plasticized * 0.92),
-        5,
+        targetIntensity,
+        5.2,
+        delta,
+      );
+      centreLightRef.current.position.y = THREE.MathUtils.damp(
+        centreLightRef.current.position.y,
+        THREE.MathUtils.lerp(0.92, 0.52, injectionTakeover),
+        4.6,
+        delta,
+      );
+      centreLightRef.current.position.z = THREE.MathUtils.damp(
+        centreLightRef.current.position.z,
+        THREE.MathUtils.lerp(2.25, 1.35, injectionTakeover),
+        4.6,
         delta,
       );
     }
@@ -306,10 +349,10 @@ export default function PlasticizingMelt({ progressRef }) {
 
       <pointLight
         ref={centreLightRef}
-        position={[0, 0.9, 2.45]}
+        position={[0, 0.92, 2.25]}
         color="#c1d9ed"
         intensity={0}
-        distance={5.6}
+        distance={5.2}
         decay={2}
       />
     </group>
