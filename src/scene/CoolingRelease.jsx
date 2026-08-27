@@ -50,48 +50,64 @@ export default function CoolingRelease({ progressRef }) {
     const bottomHalf = bottomHalfRef.current;
     const pins = pinsRef.current;
 
-    const closed = range(p, 0.565, 0.635);
-    const cooling = range(p, 0.59, 0.735);
-    const release = range(p, 0.755, 0.835);
-    const mouldFade = 1 - range(p, 0.84, 0.895);
-    const mouldVisibility = closed * mouldFade;
-    const ejection = range(p, 0.785, 0.845) * (1 - range(p, 0.855, 0.9));
-    const hero = range(p, 0.805, 0.915);
+    // The mould now enters before cavity filling has fully finished. It closes
+    // around the same visual event instead of popping in at the start of cooling.
+    const mouldArrive = range(p, 0.445, 0.535);
+    const clamp = range(p, 0.475, 0.565);
+    const cooling = range(p, 0.555, 0.745);
+    const release = range(p, 0.745, 0.835);
+    const mouldFade = 1 - range(p, 0.84, 0.9);
+    const mouldVisibility = mouldArrive * mouldFade;
+    const ejection = range(p, 0.785, 0.845) * (1 - range(p, 0.86, 0.905));
+    const hero = range(p, 0.805, 0.92);
 
-    plateMaterial.opacity = mouldVisibility * 0.78;
-    lipMaterial.opacity = mouldVisibility * 0.86;
-    pinMaterial.opacity = ejection * 0.8;
+    plateMaterial.opacity = mouldVisibility * THREE.MathUtils.lerp(0.48, 0.78, clamp);
+    lipMaterial.opacity = mouldVisibility * THREE.MathUtils.lerp(0.58, 0.86, clamp);
+    pinMaterial.opacity = ejection * 0.78;
 
     if (topHalf) {
       topHalf.visible = mouldVisibility > 0.002;
-      const targetY = THREE.MathUtils.lerp(0.77, 2.3, release);
+      const clampedY = THREE.MathUtils.lerp(1.08, 0.77, clamp);
+      const targetY = THREE.MathUtils.lerp(clampedY, 2.3, release);
       topHalf.position.y = THREE.MathUtils.damp(topHalf.position.y, targetY, 5.8, delta);
-      topHalf.rotation.y = THREE.MathUtils.damp(topHalf.rotation.y, release * 0.018, 4.5, delta);
+      topHalf.rotation.y = THREE.MathUtils.damp(
+        topHalf.rotation.y,
+        release * 0.018,
+        4.5,
+        delta,
+      );
     }
 
     if (bottomHalf) {
       bottomHalf.visible = mouldVisibility > 0.002;
-      const targetY = THREE.MathUtils.lerp(-0.73, -2.18, release);
+      const clampedY = THREE.MathUtils.lerp(-1.04, -0.73, clamp);
+      const targetY = THREE.MathUtils.lerp(clampedY, -2.18, release);
       bottomHalf.position.y = THREE.MathUtils.damp(bottomHalf.position.y, targetY, 5.8, delta);
-      bottomHalf.rotation.y = THREE.MathUtils.damp(bottomHalf.rotation.y, release * -0.012, 4.5, delta);
+      bottomHalf.rotation.y = THREE.MathUtils.damp(
+        bottomHalf.rotation.y,
+        release * -0.012,
+        4.5,
+        delta,
+      );
     }
 
     if (pins) {
       pins.visible = ejection > 0.003;
+      const pinStroke = range(p, 0.785, 0.84);
       pins.position.y = THREE.MathUtils.damp(
         pins.position.y,
-        THREE.MathUtils.lerp(-0.62, -0.39, range(p, 0.785, 0.835)),
+        THREE.MathUtils.lerp(-0.62, -0.39, pinStroke),
         6.4,
         delta,
       );
     }
 
-    // During cooling, the light is broad and technical; as the mould opens the
-    // lighting hands off to a cleaner studio setup for the final hero product.
+    // Cooling light starts softly during the clamp/fill overlap. It then hands
+    // off continuously to the hero rig while the mould is opening.
     if (coolLeftRef.current) {
       coolLeftRef.current.intensity = THREE.MathUtils.damp(
         coolLeftRef.current.intensity,
-        cooling * (1 - hero) * 1.35,
+        (clamp * 0.28 + cooling * 1.12) * (1 - hero) * 1.12,
         5,
         delta,
       );
@@ -99,7 +115,7 @@ export default function CoolingRelease({ progressRef }) {
     if (coolRightRef.current) {
       coolRightRef.current.intensity = THREE.MathUtils.damp(
         coolRightRef.current.intensity,
-        cooling * (1 - hero) * 1.05,
+        (clamp * 0.22 + cooling * 0.94) * (1 - hero),
         5,
         delta,
       );
@@ -107,7 +123,7 @@ export default function CoolingRelease({ progressRef }) {
     if (heroKeyRef.current) {
       heroKeyRef.current.intensity = THREE.MathUtils.damp(
         heroKeyRef.current.intensity,
-        hero * 3.25,
+        hero * 3.05,
         4.2,
         delta,
       );
@@ -115,7 +131,7 @@ export default function CoolingRelease({ progressRef }) {
     if (heroRimRef.current) {
       heroRimRef.current.intensity = THREE.MathUtils.damp(
         heroRimRef.current.intensity,
-        hero * 2.1,
+        hero * 1.95,
         4.2,
         delta,
       );
@@ -124,7 +140,7 @@ export default function CoolingRelease({ progressRef }) {
 
   return (
     <group>
-      <group ref={topHalfRef} position={[0, 0.77, 0]} visible={false}>
+      <group ref={topHalfRef} position={[0, 1.08, 0]} visible={false}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} material={plateMaterial}>
           <ringGeometry args={[2.78, 4.05, 112]} />
         </mesh>
@@ -136,7 +152,7 @@ export default function CoolingRelease({ progressRef }) {
         </mesh>
       </group>
 
-      <group ref={bottomHalfRef} position={[0, -0.73, 0]} visible={false}>
+      <group ref={bottomHalfRef} position={[0, -1.04, 0]} visible={false}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} material={plateMaterial}>
           <ringGeometry args={[2.72, 4.02, 112]} />
         </mesh>
