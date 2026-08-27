@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
-const STREAM_COUNT = 12;
 const CLUSTERS_PER_SIDE = 5;
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
@@ -13,12 +12,10 @@ const smooth = (value) => {
 };
 const range = (value, start, end) => smooth((value - start) / (end - start));
 
-// Slow at the source, accelerate while the material is pulled to the centre,
-// then gently settle before it hands off to the next phase.
 function attractionEase(value) {
   const t = clamp01(value);
-  if (t < 0.72) return 0.8 * Math.pow(t / 0.72, 1.32);
-  return 0.8 + smooth((t - 0.72) / 0.28) * 0.2;
+  if (t < 0.7) return 0.78 * Math.pow(t / 0.7, 1.28);
+  return 0.78 + smooth((t - 0.7) / 0.3) * 0.22;
 }
 
 function seededRandom(seed = 1337) {
@@ -40,9 +37,9 @@ function createMicroTexture(seed = 91, size = 48) {
     for (let x = 0; x < size; x += 1) {
       const nx = x / size;
       const ny = y / size;
-      const broad = Math.sin(nx * TAU * 5.8 + ny * 4.4) * 2.3;
-      const cutter = Math.sin(nx * TAU * 17 - ny * 9.5) * 1.1;
-      const grain = (random() - 0.5) * 6.4;
+      const broad = Math.sin(nx * TAU * 5.8 + ny * 4.4) * 2.0;
+      const cutter = Math.sin(nx * TAU * 17 - ny * 9.5) * 0.9;
+      const grain = (random() - 0.5) * 5.2;
       pixels[y * size + x] = Math.max(0, Math.min(255, 128 + broad + cutter + grain));
     }
   }
@@ -56,13 +53,13 @@ function createMicroTexture(seed = 91, size = 48) {
   );
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 1.8);
+  texture.repeat.set(4.6, 2.1);
   texture.colorSpace = THREE.NoColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
 
-function deformGeometry(geometry, phase, strength = 0.005) {
+function deformGeometry(geometry, phase, strength = 0.004) {
   const position = geometry.attributes.position;
 
   for (let i = 0; i < position.count; i += 1) {
@@ -71,11 +68,11 @@ function deformGeometry(geometry, phase, strength = 0.005) {
     const z = position.getZ(i);
     const radial = 1
       + Math.sin(x * 29 + y * 41 + z * 23 + phase) * strength
-      + Math.cos(x * 17 - y * 31 + z * 37 + phase * 0.7) * strength * 0.42;
+      + Math.cos(x * 17 - y * 31 + z * 37 + phase * 0.7) * strength * 0.38;
 
     position.setXYZ(
       i,
-      x * (1 + Math.sin(z * 22 + phase) * strength * 0.2),
+      x * (1 + Math.sin(z * 22 + phase) * strength * 0.16),
       y * radial,
       z * radial,
     );
@@ -87,22 +84,16 @@ function deformGeometry(geometry, phase, strength = 0.005) {
 }
 
 function makePelletGeometry(type) {
-  if (type === 2) {
-    const geometry = new THREE.DodecahedronGeometry(0.066, 1);
-    geometry.scale(1.12, 0.92, 0.86);
-    return deformGeometry(geometry, 4.2, 0.014);
-  }
-
   const profile = type === 0
     ? [
-      [0, -0.098], [0.038, -0.098], [0.054, -0.092], [0.064, -0.079],
-      [0.069, -0.056], [0.07, 0.056], [0.065, 0.079], [0.055, 0.092],
-      [0.038, 0.098], [0, 0.098],
+      [0, -0.096], [0.036, -0.096], [0.052, -0.09], [0.063, -0.077],
+      [0.068, -0.054], [0.069, 0.054], [0.064, 0.078], [0.053, 0.091],
+      [0.036, 0.097], [0, 0.097],
     ]
     : [
-      [0, -0.094], [0.034, -0.092], [0.05, -0.085], [0.061, -0.07],
-      [0.068, -0.044], [0.069, 0], [0.068, 0.044], [0.061, 0.07],
-      [0.05, 0.085], [0.034, 0.092], [0, 0.094],
+      [0, -0.09], [0.032, -0.089], [0.048, -0.082], [0.06, -0.067],
+      [0.066, -0.042], [0.067, 0], [0.066, 0.042], [0.06, 0.067],
+      [0.048, 0.082], [0.032, 0.089], [0, 0.09],
     ];
 
   const geometry = new THREE.LatheGeometry(
@@ -110,8 +101,8 @@ function makePelletGeometry(type) {
     type === 0 ? 14 : 12,
   );
   geometry.rotateZ(Math.PI / 2);
-  if (type === 1) geometry.scale(1.04, 0.96, 1.01);
-  return deformGeometry(geometry, 1.3 + type * 1.8, type === 0 ? 0.0035 : 0.0055);
+  if (type === 1) geometry.scale(1.06, 0.94, 1.01);
+  return deformGeometry(geometry, 1.4 + type * 1.9, type === 0 ? 0.0032 : 0.0048);
 }
 
 function getQualityCount() {
@@ -119,10 +110,9 @@ function getQualityCount() {
   const width = window.innerWidth;
   const cores = navigator.hardwareConcurrency || 6;
 
-  // Stage 01 benefits from density, but keep the mobile budget conservative.
-  if (width < 680) return cores <= 4 ? 660 : 900;
-  if (width < 1100) return cores <= 4 ? 1120 : 1540;
-  return cores <= 4 ? 1800 : 2600;
+  if (width < 680) return cores <= 4 ? 620 : 860;
+  if (width < 1100) return cores <= 4 ? 1080 : 1480;
+  return cores <= 4 ? 1760 : 2500;
 }
 
 function write3(target, i3, x, y, z) {
@@ -131,13 +121,12 @@ function write3(target, i3, x, y, z) {
   target[i3 + 2] = z;
 }
 
-function buildParticleData(count, compactViewport = false) {
+function buildParticleData(count, compact = false) {
   const random = seededRandom(918273);
   const stream = new Float32Array(count * 3);
   const funnel = new Float32Array(count * 3);
   const compressed = new Float32Array(count * 3);
   const preform = new Float32Array(count * 3);
-  const surface = new Float32Array(count * 3);
   const absorb = new Float32Array(count * 3);
   const rotation = new Float32Array(count * 3);
   const scale = new Float32Array(count * 3);
@@ -153,31 +142,28 @@ function buildParticleData(count, compactViewport = false) {
   const entryDepth = new Float32Array(count);
   const entryCluster = new Float32Array(count);
   const entryDelay = new Float32Array(count);
+  const entryWidth = new Float32Array(count);
   const separation = new Float32Array(count);
   const variant = new Uint8Array(count);
 
-  const funnelScale = compactViewport ? 0.78 : 1;
-  const verticalScale = compactViewport ? 0.9 : 1;
-  const topSpread = compactViewport ? 3.05 : 5.7;
-  const centreSpread = compactViewport ? 0.58 : 0.9;
-  const depthSpread = compactViewport ? 0.72 : 1.35;
+  const verticalScale = compact ? 0.9 : 1;
+  const topSpread = compact ? 3.2 : 6.05;
+  const lowerSpread = compact ? 0.78 : 1.28;
+  const depthSpread = compact ? 0.76 : 1.52;
 
   for (let i = 0; i < count; i += 1) {
     const i3 = i * 3;
-    const lane = i % STREAM_COUNT;
     const side = random() < 0.5 ? -1 : 1;
     const cluster = Math.floor(random() * CLUSTERS_PER_SIDE);
     const clusterBand = cluster / Math.max(1, CLUSTERS_PER_SIDE - 1);
-    const laneAngle = side < 0 ? Math.PI : 0;
     const localPhase = random() * TAU;
     const arc = 0.72 + random() * 0.62;
     const depth = (random() - 0.5) * 2;
+    const widthJitter = (random() - 0.5) * 2;
 
-    // Most pellets sit in soft packets instead of a uniform mathematical lane.
-    // A smaller filler population bridges the packets so the flow stays organic.
-    const packetCentre = 0.08 + clusterBand * 0.84;
-    const packetWidth = 0.11 + random() * 0.055;
-    const clustered = random() < 0.76;
+    const packetCentre = 0.07 + clusterBand * 0.86;
+    const packetWidth = 0.12 + random() * 0.06;
+    const clustered = random() < 0.72;
     const t = clustered
       ? clamp01(packetCentre + (random() - 0.5) * packetWidth)
       : random();
@@ -185,120 +171,90 @@ function buildParticleData(count, compactViewport = false) {
     pathT[i] = t;
     phase[i] = localPhase;
     tint[i] = random();
-    flutter[i] = 0.42 + random() * 0.62;
-    speed[i] = 0.88 + cluster * 0.012 + (random() - 0.5) * 0.1;
-    lag[i] = (random() - 0.5) * 0.014;
-    fuseOffset[i] = (random() - 0.5) * 0.038;
+    flutter[i] = 0.4 + random() * 0.56;
+    speed[i] = 0.84 + random() * 0.2;
+    lag[i] = (random() - 0.5) * 0.012;
+    fuseOffset[i] = (random() - 0.5) * 0.035;
     entrySide[i] = side;
     entryArc[i] = arc;
     entryDepth[i] = depth;
     entryCluster[i] = clusterBand;
+    entryWidth[i] = widthJitter;
     separation[i] = random();
 
-    // Roughly one third of the batch is present immediately. The rest starts
-    // upstream, outside the camera, and naturally enters as the user scrolls.
     const delayPick = random();
-    entryDelay[i] = delayPick < 0.34 ? 0 : ((delayPick - 0.34) / 0.66) * 0.07;
-
-    const pick = random();
-    variant[i] = pick < 0.68 ? 0 : pick < 0.95 ? 1 : 2;
+    entryDelay[i] = delayPick < 0.34 ? 0 : ((delayPick - 0.34) / 0.66) * 0.065;
+    variant[i] = random() < 0.76 ? 0 : 1;
 
     const entryEase = attractionEase(t);
-    const spread = THREE.MathUtils.lerp(topSpread, centreSpread, entryEase);
+    const spread = THREE.MathUtils.lerp(topSpread, lowerSpread, entryEase);
+    const sourceWidth = THREE.MathUtils.lerp(compact ? 0.5 : 0.92, compact ? 0.18 : 0.34, entryEase);
     const bow = Math.sin(t * Math.PI);
-    const packetWave = Math.sin((t + clusterBand * 0.11) * TAU * 1.12 + localPhase * 0.34);
-    const streamX = side * (
-      spread * (0.82 + arc * 0.15)
-      + bow * (0.2 + arc * 0.13)
-    );
-    const streamY = (9.65 - t * 17.55) * verticalScale
-      + (clusterBand - 0.5) * 0.52 * (1 - t)
-      + Math.sin(t * Math.PI + localPhase * 0.11) * 0.12;
-    const streamZ = depth * THREE.MathUtils.lerp(depthSpread, 0.34, entryEase)
-      + Math.sin(t * TAU * 0.72 + localPhase) * 0.2
-      + (clusterBand - 0.5) * 0.24 * (1 - entryEase);
+    const packetWave = Math.sin((t + clusterBand * 0.13) * TAU * 0.86 + localPhase * 0.28);
 
     write3(
       stream,
       i3,
-      streamX + packetWave * 0.12 + (random() - 0.5) * 0.09,
-      streamY + (random() - 0.5) * 0.12,
-      streamZ + (random() - 0.5) * 0.08,
+      side * (spread * (0.88 + arc * 0.08) + bow * 0.16)
+        + widthJitter * sourceWidth
+        + packetWave * 0.14,
+      (9.7 - t * 17.55) * verticalScale
+        + (clusterBand - 0.5) * 0.58 * (1 - t)
+        + (random() - 0.5) * 0.16,
+      depth * THREE.MathUtils.lerp(depthSpread, compact ? 0.36 : 0.52, entryEase)
+        + Math.sin(t * TAU * 0.54 + localPhase) * 0.22
+        + widthJitter * 0.08,
     );
 
-    // Stage 02 hand-off: a broad, slow central helix. It deliberately avoids
-    // the frantic tornado feel so Stage 01 remains the visual hero.
-    const funnelTurns = 1.66 + (lane % 6) * 0.032;
-    const funnelAngle = laneAngle + t * TAU * funnelTurns + localPhase * 0.07;
-    const funnelRadius = (3.45 - t * 1.9 + Math.sin(t * TAU * 1.4 + localPhase) * 0.1) * funnelScale;
+    // Broad converging streams, not a DNA helix. The material is guided inward
+    // with only a gentle S bend and depth variation.
+    const funnelEase = smooth(t);
     write3(
       funnel,
       i3,
-      Math.cos(funnelAngle) * funnelRadius,
-      (5.55 - t * 9.7) * verticalScale + (random() - 0.5) * 0.16,
-      Math.sin(funnelAngle) * funnelRadius * 0.84,
+      side * THREE.MathUtils.lerp(compact ? 1.85 : 2.9, compact ? 0.5 : 0.82, funnelEase)
+        + Math.sin(localPhase + t * 2.05) * (compact ? 0.22 : 0.38)
+        + widthJitter * THREE.MathUtils.lerp(0.28, 0.08, funnelEase),
+      (5.25 - t * 8.25) * verticalScale + (random() - 0.5) * 0.16,
+      depth * THREE.MathUtils.lerp(compact ? 0.52 : 0.86, 0.22, funnelEase)
+        + side * Math.sin(t * Math.PI) * (compact ? 0.18 : 0.3)
+        + Math.sin(localPhase * 0.7) * 0.12,
     );
 
-    const tightTurns = 2.72 + (lane % 6) * 0.042;
-    const tightAngle = laneAngle + t * TAU * tightTurns + localPhase * 0.052;
-    const tightRadius = (2.88 - t * 1.76 + Math.sin(t * TAU * 2 + localPhase) * 0.085) * funnelScale;
+    const compactEase = smooth(t);
     write3(
       compressed,
       i3,
-      Math.cos(tightAngle) * tightRadius,
-      (4 - t * 6.65) * verticalScale + (random() - 0.5) * 0.15,
-      Math.sin(tightAngle) * tightRadius * 0.86,
+      side * THREE.MathUtils.lerp(compact ? 0.9 : 1.45, 0.14, compactEase)
+        + Math.cos(localPhase) * (compact ? 0.12 : 0.2),
+      (3.15 - t * 3.0) * verticalScale + (random() - 0.5) * 0.12,
+      depth * THREE.MathUtils.lerp(compact ? 0.34 : 0.5, 0.1, compactEase)
+        + Math.sin(localPhase) * (compact ? 0.11 : 0.17),
     );
 
-    const band = Math.floor(random() * 8);
-    const bandRadius = 0.48 + band * 0.29 + random() * 0.18;
-    const bandAngle = localPhase + t * TAU * (1.08 + (band % 3) * 0.12);
+    const preRadius = (compact ? 0.12 : 0.16) + random() * (compact ? 0.38 : 0.55);
+    const preAngle = localPhase + side * 0.18;
     write3(
       preform,
       i3,
-      Math.cos(bandAngle) * bandRadius,
-      0.83 + (band - 3.5) * 0.018 + (random() - 0.5) * 0.05,
-      Math.sin(bandAngle) * bandRadius * 0.96,
+      Math.cos(preAngle) * preRadius + side * 0.08,
+      (1.9 - t * 1.32) * verticalScale + (random() - 0.5) * 0.09,
+      Math.sin(preAngle) * preRadius * 0.78,
     );
 
-    const surfacePick = random();
-    if (surfacePick < 0.74) {
-      const radius = Math.sqrt(random()) * 2.27;
-      const a = random() * TAU;
-      const sx = Math.cos(a) * radius;
-      const sz = Math.sin(a) * radius;
-      write3(surface, i3, sx, 0.625 + random() * 0.035, sz);
-      write3(absorb, i3, sx, 0.475 - random() * 0.035, sz);
-    } else {
-      const a = random() * TAU;
-      const radius = 2.56 + random() * 0.08;
-      const y = -0.28 + random() * 0.77;
-      const sx = Math.cos(a) * radius;
-      const sz = Math.sin(a) * radius;
-      write3(surface, i3, sx, y, sz);
-      write3(
-        absorb,
-        i3,
-        Math.cos(a) * (radius - 0.16),
-        y,
-        Math.sin(a) * (radius - 0.16),
-      );
-    }
+    const absorbRadius = 0.025 + random() * (compact ? 0.12 : 0.17);
+    write3(
+      absorb,
+      i3,
+      Math.cos(localPhase) * absorbRadius,
+      0.56 + (0.5 - t) * 0.22 + (random() - 0.5) * 0.045,
+      Math.sin(localPhase) * absorbRadius * 0.75,
+    );
 
-    const base = 0.8 + random() * 0.2;
-    if (variant[i] === 0) {
-      scale[i3] = base * (0.92 + random() * 0.14);
-      scale[i3 + 1] = base * (0.9 + random() * 0.09);
-      scale[i3 + 2] = base * (0.91 + random() * 0.09);
-    } else if (variant[i] === 1) {
-      scale[i3] = base * (0.98 + random() * 0.15);
-      scale[i3 + 1] = base * (0.86 + random() * 0.1);
-      scale[i3 + 2] = base * (0.88 + random() * 0.1);
-    } else {
-      scale[i3] = base * (0.85 + random() * 0.13);
-      scale[i3 + 1] = base * (0.82 + random() * 0.12);
-      scale[i3 + 2] = base * (0.84 + random() * 0.12);
-    }
+    const base = 0.82 + random() * 0.18;
+    scale[i3] = base * (0.92 + random() * 0.1);
+    scale[i3 + 1] = base * (0.9 + random() * 0.08);
+    scale[i3 + 2] = base * (0.91 + random() * 0.08);
 
     rotation[i3] = random() * TAU;
     rotation[i3 + 1] = random() * TAU;
@@ -310,7 +266,6 @@ function buildParticleData(count, compactViewport = false) {
     funnel,
     compressed,
     preform,
-    surface,
     absorb,
     rotation,
     scale,
@@ -326,8 +281,10 @@ function buildParticleData(count, compactViewport = false) {
     entryDepth,
     entryCluster,
     entryDelay,
+    entryWidth,
     separation,
     variant,
+    compact,
   };
 }
 
@@ -338,128 +295,126 @@ function resolvePosition(data, index, rawProgress, time, position, euler, scaleV
 
   let from = data.stream;
   let to = data.funnel;
-  let mix = attractionEase(range(progress, 0.105, 0.24));
-  let turbulence = Math.sin(mix * Math.PI) * 0.095;
+  let mix = attractionEase(range(progress, 0.105, 0.22));
+  let turbulence = Math.sin(mix * Math.PI) * 0.078;
 
-  if (progress >= 0.24 && progress < 0.37) {
+  if (progress >= 0.22 && progress < 0.32) {
     from = data.funnel;
     to = data.compressed;
-    mix = range(progress, 0.24, 0.37);
-    turbulence = Math.sin(mix * Math.PI) * 0.125;
-  } else if (progress >= 0.37 && progress < 0.5) {
+    mix = range(progress, 0.22, 0.32);
+    turbulence = Math.sin(mix * Math.PI) * 0.065;
+  } else if (progress >= 0.32 && progress < 0.42) {
     from = data.compressed;
     to = data.preform;
-    mix = range(progress, 0.37, 0.5);
-    turbulence = Math.sin(mix * Math.PI) * 0.078;
-  } else if (progress >= 0.5 && progress < 0.63) {
+    mix = range(progress, 0.32, 0.42);
+    turbulence = Math.sin(mix * Math.PI) * 0.038;
+  } else if (progress >= 0.42 && progress < 0.515) {
     from = data.preform;
-    to = data.surface;
-    mix = range(progress, 0.5, 0.63);
-    turbulence = Math.sin(mix * Math.PI) * 0.04;
-  } else if (progress >= 0.63) {
-    from = data.surface;
     to = data.absorb;
-    mix = range(progress, 0.63, 0.76);
-    turbulence = 0.005;
+    mix = range(progress, 0.42, 0.515);
+    turbulence = Math.sin(mix * Math.PI) * 0.016;
+  } else if (progress >= 0.515) {
+    from = data.absorb;
+    to = data.absorb;
+    mix = 1;
+    turbulence = 0.0025;
   }
 
   let fromX = from[i3];
   let fromY = from[i3 + 1];
   let fromZ = from[i3 + 2];
 
-  // Stage 01: continuous feed from upper-left and upper-right. Pellets are not
-  // spawned/hidden; late particles simply live upstream and enter the camera.
-  if (progress < 0.235) {
-    const mobile = typeof window !== 'undefined' && window.innerWidth < 680;
-    const topSpread = mobile ? 3.05 : 5.7;
-    const centreSpread = mobile ? 0.58 : 0.9;
-    const depthSpread = mobile ? 0.72 : 1.35;
+  if (progress < 0.22) {
+    const topSpread = data.compact ? 3.2 : 6.05;
+    const lowerSpread = data.compact ? 0.78 : 1.28;
+    const depthSpread = data.compact ? 0.76 : 1.52;
     const movingT = (
       data.pathT[index]
-      + time * 0.016 * data.speed[index]
-      + Math.min(rawProgress, 0.2) * 0.42
+      + time * 0.013 * data.speed[index]
+      + Math.min(rawProgress, 0.19) * 0.38
     ) % 1;
     const entryEase = attractionEase(movingT);
-    const spread = THREE.MathUtils.lerp(topSpread, centreSpread, entryEase);
+    const spread = THREE.MathUtils.lerp(topSpread, lowerSpread, entryEase);
+    const sourceWidth = THREE.MathUtils.lerp(
+      data.compact ? 0.5 : 0.92,
+      data.compact ? 0.18 : 0.34,
+      entryEase,
+    );
     const bow = Math.sin(movingT * Math.PI);
     const packetWave = Math.sin(
-      (movingT + data.entryCluster[index] * 0.11) * TAU * 1.12 + phase * 0.34,
+      (movingT + data.entryCluster[index] * 0.13) * TAU * 0.86 + phase * 0.28,
     );
 
-    const animatedX = data.entrySide[index] * (
-      spread * (0.82 + data.entryArc[index] * 0.15)
-      + bow * (0.2 + data.entryArc[index] * 0.13)
-    ) + packetWave * 0.12;
-    let animatedY = (9.65 - movingT * 17.55) * (mobile ? 0.9 : 1)
-      + (data.entryCluster[index] - 0.5) * 0.52 * (1 - movingT)
-      + Math.sin(movingT * Math.PI + phase * 0.11) * 0.12;
+    const animatedX = data.entrySide[index]
+      * (spread * (0.88 + data.entryArc[index] * 0.08) + bow * 0.16)
+      + data.entryWidth[index] * sourceWidth
+      + packetWave * 0.14;
+    let animatedY = (9.7 - movingT * 17.55) * (data.compact ? 0.9 : 1)
+      + (data.entryCluster[index] - 0.5) * 0.58 * (1 - movingT);
     const animatedZ = data.entryDepth[index]
-      * THREE.MathUtils.lerp(depthSpread, 0.34, entryEase)
-      + Math.sin(movingT * TAU * 0.72 + phase) * 0.2
-      + (data.entryCluster[index] - 0.5) * 0.24 * (1 - entryEase);
+      * THREE.MathUtils.lerp(depthSpread, data.compact ? 0.36 : 0.52, entryEase)
+      + Math.sin(movingT * TAU * 0.54 + phase) * 0.22
+      + data.entryWidth[index] * 0.08;
 
     const arrival = range(rawProgress + 0.008, data.entryDelay[index], data.entryDelay[index] + 0.048);
     const upstream = 1 - arrival;
-    animatedY += upstream * (7.8 + data.entryDelay[index] * 22);
+    animatedY += upstream * (7.6 + data.entryDelay[index] * 20);
 
-    const live = 1 - range(progress, 0.13, 0.235);
-    fromX = THREE.MathUtils.lerp(fromX, animatedX + data.entrySide[index] * upstream * 0.8, live);
+    const live = 1 - range(progress, 0.13, 0.22);
+    fromX = THREE.MathUtils.lerp(
+      fromX,
+      animatedX + data.entrySide[index] * upstream * 0.65,
+      live,
+    );
     fromY = THREE.MathUtils.lerp(fromY, animatedY, live);
     fromZ = THREE.MathUtils.lerp(fromZ, animatedZ, live);
   }
 
-  const settle = range(progress, 0.52, 0.7);
-  const micro = (0.007 + data.flutter[index] * 0.0038) * (1 - settle * 0.9);
+  const micro = (0.0055 + data.flutter[index] * 0.0028) * (1 - range(progress, 0.46, 0.58));
 
   position.set(
     THREE.MathUtils.lerp(fromX, to[i3], mix)
-      + Math.cos(phase + time * 0.46) * turbulence
-      + Math.sin(time * 0.62 + phase) * micro,
+      + Math.cos(phase + time * 0.35) * turbulence
+      + Math.sin(time * 0.48 + phase) * micro,
     THREE.MathUtils.lerp(fromY, to[i3 + 1], mix)
-      + Math.sin(phase * 0.71 + time * 0.56) * turbulence * 0.07,
+      + Math.sin(phase * 0.71 + time * 0.43) * turbulence * 0.055,
     THREE.MathUtils.lerp(fromZ, to[i3 + 2], mix)
-      + Math.sin(phase + time * 0.44) * turbulence * 0.7
-      + Math.cos(time * 0.58 + phase) * micro,
+      + Math.sin(phase + time * 0.33) * turbulence * 0.64
+      + Math.cos(time * 0.44 + phase) * micro,
   );
 
-  // Collision-like visual spacing without an O(n²) physics pass. Each pellet
-  // keeps a tiny deterministic personal radius that is strongest as the two
-  // streams meet, preventing the centre from reading as a single solid clump.
-  const convergenceWindow = range(progress, 0.075, 0.19) * (1 - range(progress, 0.31, 0.46));
-  const spacingFade = 1 - range(progress, 0.46, 0.62);
-  const spacing = (0.018 + data.separation[index] * 0.05)
-    * (0.72 + convergenceWindow * 0.48)
+  const convergenceWindow = range(progress, 0.08, 0.18) * (1 - range(progress, 0.3, 0.43));
+  const spacingFade = 1 - range(progress, 0.43, 0.52);
+  const spacing = (0.014 + data.separation[index] * 0.038)
+    * (0.75 + convergenceWindow * 0.35)
     * spacingFade;
-  const spacingAngle = phase * 1.37 + data.entryCluster[index] * 2.1;
+  const spacingAngle = phase * 1.31 + data.entryCluster[index] * 2.0;
   position.x += Math.cos(spacingAngle) * spacing;
   position.z += Math.sin(spacingAngle) * spacing;
 
-  const braid = range(progress, 0.16, 0.32) * (1 - range(progress, 0.5, 0.62));
-  const forming = range(progress, 0.4, 0.58) * (1 - range(progress, 0.68, 0.77));
-
-  // Real pellets mostly tumble because of collisions; they do not spin like
-  // coins. Keep the initial random orientation and only allow a 1–2° rock.
-  const freeTumble = 1 - range(progress, 0.42, 0.66);
-  const tumbleX = Math.sin(time * (0.2 + data.flutter[index] * 0.025) + phase)
-    * 0.028 * freeTumble;
-  const tumbleY = Math.sin(time * 0.17 + phase * 0.63)
-    * 0.014 * freeTumble;
-  const tumbleZ = Math.cos(time * (0.18 + data.flutter[index] * 0.02) + phase * 0.82)
-    * 0.022 * freeTumble;
-  const inwardLean = data.entrySide[index] * -0.095 * (1 - range(progress, 0.2, 0.36));
+  const freeTumble = 1 - range(progress, 0.38, 0.5);
+  const tumbleX = Math.sin(time * (0.18 + data.flutter[index] * 0.02) + phase)
+    * 0.021 * freeTumble;
+  const tumbleY = Math.sin(time * 0.15 + phase * 0.63)
+    * 0.011 * freeTumble;
+  const tumbleZ = Math.cos(time * (0.16 + data.flutter[index] * 0.018) + phase * 0.82)
+    * 0.017 * freeTumble;
+  const inwardLean = data.entrySide[index] * -0.07 * (1 - range(progress, 0.18, 0.34));
 
   euler.set(
     data.rotation[i3] + tumbleX,
-    data.rotation[i3 + 1] + inwardLean + braid * 0.34 + forming * 0.1 + tumbleY,
+    data.rotation[i3 + 1] + inwardLean + tumbleY,
     data.rotation[i3 + 2] + tumbleZ,
   );
 
-  const fuseStart = 0.56 + data.fuseOffset[index];
-  const fuseEnd = 0.73 + data.fuseOffset[index] * 0.2;
+  // Pellets are absorbed into the plasticizing mass before the mould arrives.
+  // This prevents the old pile of granules sitting on top of the formed part.
+  const fuseStart = 0.405 + data.fuseOffset[index] * 0.42;
+  const fuseEnd = 0.535 + data.fuseOffset[index] * 0.14;
   const fuse = range(rawProgress, fuseStart, fuseEnd);
-  const compact = THREE.MathUtils.lerp(1, 0.8, range(progress, 0.52, 0.65));
-  const fusionScale = THREE.MathUtils.lerp(1, 0.015, fuse);
-  const pulse = 1 + Math.sin(time * 1 + phase) * 0.002 * (1 - fuse);
+  const compact = THREE.MathUtils.lerp(1, 0.84, range(progress, 0.35, 0.49));
+  const fusionScale = THREE.MathUtils.lerp(1, 0.012, fuse);
+  const pulse = 1 + Math.sin(time * 0.82 + phase) * 0.0015 * (1 - fuse);
 
   scaleVector.set(
     data.scale[i3] * compact * fusionScale * pulse,
@@ -491,8 +446,8 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     for (let local = 0; local < indices.length; local += 1) {
       const particle = indices[local];
-      color.copy(dark).lerp(mid, 0.45 + data.tint[particle] * 0.38);
-      color.lerp(high, 0.035 + data.tint[particle] * 0.055);
+      color.copy(dark).lerp(mid, 0.5 + data.tint[particle] * 0.34);
+      color.lerp(high, 0.025 + data.tint[particle] * 0.045);
       mesh.setColorAt(local, color);
     }
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -520,10 +475,9 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
     mesh.instanceMatrix.needsUpdate = true;
 
-    const braid = range(progress, 0.16, 0.32) * (1 - range(progress, 0.51, 0.62));
-    const preform = range(progress, 0.37, 0.5) * (1 - range(progress, 0.62, 0.72));
-    const targetRotation = time * (braid * 0.008 + preform * 0.005);
-    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3, delta);
+    const convergence = range(progress, 0.15, 0.3) * (1 - range(progress, 0.42, 0.52));
+    const targetRotation = Math.sin(time * 0.1) * 0.003 * convergence;
+    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.2, delta);
   });
 
   return (
@@ -539,87 +493,53 @@ function PelletLayer({ indices, geometry, material, palette, data, progressRef }
 
 export default function PhotorealGranules({ progressRef }) {
   const count = useMemo(getQualityCount, []);
-  const compactViewport = useMemo(() => (
+  const compact = useMemo(() => (
     typeof window !== 'undefined' && window.innerWidth < 680
   ), []);
-  const data = useMemo(() => buildParticleData(count, compactViewport), [count, compactViewport]);
+  const data = useMemo(() => buildParticleData(count, compact), [count, compact]);
   const microTexture = useMemo(() => createMicroTexture(), []);
-  const geometries = useMemo(() => [0, 1, 2].map((type) => makePelletGeometry(type)), []);
+  const geometries = useMemo(() => [0, 1].map((type) => makePelletGeometry(type)), []);
 
   const groups = useMemo(() => {
-    const next = [[], [], []];
+    const next = [[], []];
     for (let i = 0; i < count; i += 1) next[data.variant[i]].push(i);
     return next;
   }, [count, data]);
 
   const materials = useMemo(() => [
     new THREE.MeshPhysicalMaterial({
-      color: '#2365b4',
-      roughness: 0.31,
-      metalness: 0,
-      clearcoat: 0.58,
-      clearcoatRoughness: 0.2,
-      ior: 1.47,
-      specularIntensity: 0.58,
-      specularColor: new THREE.Color('#9fc8f5'),
-      sheen: 0.1,
-      sheenRoughness: 0.48,
-      sheenColor: new THREE.Color('#397fd0'),
-      bumpMap: microTexture,
-      bumpScale: 0.0022,
-      envMapIntensity: 0.86,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      depthTest: true,
-      vertexColors: true,
-    }),
-    new THREE.MeshPhysicalMaterial({
-      color: '#3b7bc5',
-      roughness: 0.28,
-      metalness: 0,
-      clearcoat: 0.64,
-      clearcoatRoughness: 0.17,
-      ior: 1.46,
-      specularIntensity: 0.62,
-      specularColor: new THREE.Color('#b5d8fb'),
-      sheen: 0.12,
-      sheenRoughness: 0.44,
-      sheenColor: new THREE.Color('#4d91d7'),
-      bumpMap: microTexture,
-      bumpScale: 0.002,
-      envMapIntensity: 0.92,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      depthTest: true,
-      vertexColors: true,
-    }),
-    new THREE.MeshPhysicalMaterial({
-      color: '#285f9e',
+      color: '#245f9f',
       roughness: 0.36,
       metalness: 0,
-      clearcoat: 0.42,
-      clearcoatRoughness: 0.26,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.24,
       ior: 1.47,
-      specularIntensity: 0.5,
-      specularColor: new THREE.Color('#8bb8e8'),
+      specularIntensity: 0.44,
+      specularColor: new THREE.Color('#9fc4e8'),
       bumpMap: microTexture,
-      bumpScale: 0.0028,
-      envMapIntensity: 0.78,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      depthTest: true,
-      flatShading: true,
+      bumpScale: 0.0019,
+      envMapIntensity: 0.72,
+      vertexColors: true,
+    }),
+    new THREE.MeshPhysicalMaterial({
+      color: '#2e6bab',
+      roughness: 0.33,
+      metalness: 0,
+      clearcoat: 0.31,
+      clearcoatRoughness: 0.21,
+      ior: 1.47,
+      specularIntensity: 0.47,
+      specularColor: new THREE.Color('#afd0ef'),
+      bumpMap: microTexture,
+      bumpScale: 0.0017,
+      envMapIntensity: 0.76,
       vertexColors: true,
     }),
   ], [microTexture]);
 
   const palettes = useMemo(() => [
-    ['#153f73', '#2f71bd', '#7eb5ea'],
-    ['#1a4d82', '#4282c9', '#9bc8ef'],
-    ['#173d68', '#346ca8', '#78aada'],
+    ['#163f6a', '#2c6aa8', '#75a8d7'],
+    ['#194872', '#3977b3', '#83b0dc'],
   ], []);
 
   useEffect(() => () => {
