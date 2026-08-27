@@ -1,7 +1,8 @@
 import { Canvas } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import GranuleScene from './scene/GranuleScene.jsx';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import ErrorBoundary from './ErrorBoundary.jsx';
+
+const GranuleScene = lazy(() => import('./scene/GranuleScene.jsx'));
 
 const clamp01 = (value) => Math.min(1, Math.max(0, value));
 const smooth = (t) => {
@@ -32,6 +33,7 @@ export default function App() {
   const progressRef = useRef(0);
   const [uiProgress, setUiProgress] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(false);
 
   useEffect(() => {
     let frame = 0;
@@ -46,7 +48,7 @@ export default function App() {
       const next = clamp01(-rect.top / travel);
 
       progressRef.current = next;
-      setUiProgress((current) => (Math.abs(current - next) > 0.0008 ? next : current));
+      setUiProgress((current) => (Math.abs(current - next) > 0.001 ? next : current));
     };
 
     const requestUpdate = () => {
@@ -65,17 +67,17 @@ export default function App() {
   }, []);
 
   const phase = useMemo(() => {
-    if (uiProgress < 0.16) return 0;
-    if (uiProgress < 0.36) return 1;
-    if (uiProgress < 0.55) return 2;
-    if (uiProgress < 0.69) return 3;
-    if (uiProgress < 0.86) return 4;
+    if (uiProgress < 0.12) return 0;
+    if (uiProgress < 0.27) return 1;
+    if (uiProgress < 0.49) return 2;
+    if (uiProgress < 0.64) return 3;
+    if (uiProgress < 0.8) return 4;
     return 5;
   }, [uiProgress]);
 
-  const introFade = 1 - smooth(uiProgress / 0.12);
-  const productMoment = smooth((uiProgress - 0.44) / 0.06) * (1 - smooth((uiProgress - 0.68) / 0.08));
-  const outroFade = smooth((uiProgress - 0.89) / 0.07);
+  const introFade = 1 - smooth(uiProgress / 0.1);
+  const productMoment = smooth((uiProgress - 0.6) / 0.1) * (1 - smooth((uiProgress - 0.94) / 0.05));
+  const finalFade = smooth((uiProgress - 0.82) / 0.08);
 
   return (
     <div className="site-shell">
@@ -104,23 +106,38 @@ export default function App() {
       </header>
 
       <main>
-        <section ref={experienceRef} className="experience" id="experience">
+        <section
+          ref={experienceRef}
+          className="experience"
+          id="experience"
+          style={{ height: '520vh' }}
+        >
           <div className="experience__sticky">
             <div className="canvas-shell" aria-hidden="true">
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'radial-gradient(circle at 50% 42%, rgba(28, 91, 205, .18), transparent 34rem), #01050d',
+                  opacity: canvasReady ? 0 : 1,
+                  transition: 'opacity 380ms ease',
+                  pointerEvents: 'none',
+                  zIndex: 0,
+                }}
+              />
               <ErrorBoundary scope="canvas">
                 <Canvas
-                  dpr={[1, 1.65]}
-                  camera={{ position: [0, 2.7, 10.7], fov: 38, near: 0.1, far: 80 }}
-                  gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-                  onCreated={({ gl }) => {
-                    window.__tptWebgl = gl.getContext()?.getParameter?.(0x1f01) || 'webgl-ok';
-                    try {
-                      fetch('/__client-log', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type: 'webgl-ready', renderer: window.__tptWebgl }),
-                      }).catch(() => {});
-                    } catch (e) { /* noop */ }
+                  dpr={[0.85, 1.3]}
+                  camera={{ position: [0, 3.25, 11.25], fov: 38, near: 0.1, far: 70 }}
+                  gl={{
+                    antialias: false,
+                    alpha: false,
+                    stencil: false,
+                    powerPreference: 'high-performance',
+                  }}
+                  performance={{ min: 0.6 }}
+                  onCreated={() => {
+                    requestAnimationFrame(() => setCanvasReady(true));
                   }}
                 >
                   <Suspense fallback={null}>
@@ -130,9 +147,9 @@ export default function App() {
               </ErrorBoundary>
             </div>
 
-            <div className="screen-noise" />
+            <div className="screen-noise" style={{ opacity: 0.022 }} />
             <div className="screen-vignette" />
-            <div className="blueprint-grid" />
+            <div className="blueprint-grid" style={{ opacity: 0.035 }} />
 
             <div
               className="hero-copy"
@@ -149,11 +166,11 @@ export default function App() {
                 تا فرم نهایی.
               </h1>
               <p className="hero-copy__body">
-                اسکرول کنید؛ گرانول‌های پلیمر از بالا وارد می‌شوند، دور مسیر شکل‌گیری می‌چرخند و آرام‌آرام به محصول نهایی تبدیل می‌شوند.
+                اسکرول کنید؛ گرانول‌های پلیمر از بالا وارد می‌شوند، ابتدا در حلقه‌ها هم‌راستا می‌شوند، سپس گردابه شکل می‌گیرد و ماده بدون حذف شدن به فرم محصول می‌رسد.
               </p>
             </div>
 
-            <div className="scroll-cue" style={{ opacity: 1 - smooth(uiProgress / 0.09) }}>
+            <div className="scroll-cue" style={{ opacity: 1 - smooth(uiProgress / 0.075) }}>
               <span>SCROLL</span>
               <ArrowDown />
             </div>
@@ -184,8 +201,8 @@ export default function App() {
               <b>BLUEPRINT 01</b>
             </div>
 
-            <div className="outro-cue" style={{ opacity: outroFade }}>
-              <span>مواد دوباره آزاد می‌شوند</span>
+            <div className="outro-cue" style={{ opacity: finalFade }}>
+              <span>محصول نهایی</span>
               <ArrowDown />
             </div>
           </div>
@@ -200,7 +217,7 @@ export default function App() {
             </div>
             <div className="product-section__copy">
               <p>
-                صحنه بالا کاملاً سه‌بعدی و وابسته به اسکرول است؛ نه یک ویدئوی از پیش رندر شده. جهت حرکت، سرعت تبدیل و لحظه توقف مستقیماً با اسکرول کاربر کنترل می‌شود.
+                صحنه بالا کاملاً سه‌بعدی و وابسته به اسکرول است؛ نه یک ویدئوی از پیش رندر شده. دانه‌ها در تمام مسیر حفظ می‌شوند و در مرحله نهایی داخل حجم محصول قرار می‌گیرند، نه اینکه ناگهان حذف شوند.
               </p>
               <div className="mini-specs">
                 <span><b>01</b> Granules</span>
@@ -219,12 +236,12 @@ export default function App() {
             <article>
               <span>Motion</span>
               <strong>Scroll Scrub</strong>
-              <small>حرکت رفت و برگشت بدون پرش</small>
+              <small>شش مرحله پیوسته و سریع‌تر</small>
             </article>
             <article>
               <span>Rendering</span>
               <strong>WebGL / Three.js</strong>
-              <small>رندر زنده داخل مرورگر</small>
+              <small>رندر زنده با هندسه و draw-call بهینه‌شده</small>
             </article>
           </div>
         </section>
