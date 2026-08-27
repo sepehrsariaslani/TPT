@@ -118,8 +118,6 @@ function addRadialFillMask(material) {
       .replace(
         '#include <clipping_planes_fragment>',
         `#include <clipping_planes_fragment>
-        // Centre-gated cavity fill: the product is physically revealed from the
-        // gate outwards instead of fading in as a complete pre-existing mesh.
         vec2 injectionPlane = vec2(vInjectionLocalPosition.x * 0.985, vInjectionLocalPosition.z * 1.015);
         float injectionRadius = length(injectionPlane);
         if (injectionRadius > uFillRadius) discard;`,
@@ -147,6 +145,7 @@ export default function RealisticCap({ progressRef }) {
   );
 
   const hotBodyColor = useMemo(() => new THREE.Color('#2a73c4'), []);
+  const warmBodyColor = useMemo(() => new THREE.Color('#215fab'), []);
   const solidBodyColor = useMemo(() => new THREE.Color('#154e98'), []);
 
   const bodyMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
@@ -162,7 +161,7 @@ export default function RealisticCap({ progressRef }) {
     sheenRoughness: 0.72,
     sheenColor: new THREE.Color('#2d67a8'),
     bumpMap: mouldTexture,
-    bumpScale: 0.0017,
+    bumpScale: 0.0009,
     envMapIntensity: 0.9,
     transparent: false,
     opacity: 1,
@@ -175,15 +174,15 @@ export default function RealisticCap({ progressRef }) {
   const ribMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#123f7d',
     metalness: 0,
-    roughness: 0.43,
-    clearcoat: 0.22,
-    clearcoatRoughness: 0.32,
+    roughness: 0.31,
+    clearcoat: 0.36,
+    clearcoatRoughness: 0.2,
     ior: 1.47,
-    specularIntensity: 0.4,
+    specularIntensity: 0.46,
     specularColor: new THREE.Color('#9fbede'),
     bumpMap: mouldTexture,
-    bumpScale: 0.0019,
-    envMapIntensity: 0.62,
+    bumpScale: 0.0012,
+    envMapIntensity: 0.7,
     transparent: true,
     opacity: 0,
     depthWrite: true,
@@ -298,48 +297,62 @@ export default function RealisticCap({ progressRef }) {
     if (!group) return;
 
     const p = progressRef.current;
-
-    // Stage 03 — Injection / cavity fill. Area growth is approximately linear,
-    // therefore radius follows sqrt(fill). That makes the front feel materially
-    // plausible instead of moving at a constant, synthetic radial speed.
     const injection = range(p, 0.405, 0.595);
     const radialProgress = Math.sqrt(injection);
     const fillRadius = THREE.MathUtils.lerp(0.025, 2.67, radialProgress);
     fillRadiusUniform.value = fillRadius;
 
     const outerFill = range(p, 0.545, 0.625);
-    const cooling = range(p, 0.575, 0.745);
-    const settle = range(p, 0.68, 0.8);
+    const cooling = range(p, 0.575, 0.755);
+    const surfaceLock = range(p, 0.64, 0.785);
+    const shrink = range(p, 0.665, 0.795);
+    const ejection = range(p, 0.785, 0.845);
+    const hero = range(p, 0.82, 0.92);
     const injectionActivity = range(p, 0.392, 0.43) * (1 - range(p, 0.585, 0.655));
 
-    // Molten polymer transitions into the final moulded surface rather than the
-    // cap changing opacity. Highlights calm down as the part cools and solidifies.
-    bodyMaterial.color.lerpColors(hotBodyColor, solidBodyColor, cooling);
-    bodyMaterial.roughness = THREE.MathUtils.lerp(0.17, 0.34, cooling);
-    bodyMaterial.clearcoat = THREE.MathUtils.lerp(0.86, 0.34, cooling);
-    bodyMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.1, 0.24, cooling);
-    bodyMaterial.envMapIntensity = THREE.MathUtils.lerp(0.9, 0.72, cooling);
+    const firstCool = clamp01(cooling / 0.56);
+    const finalCool = clamp01((cooling - 0.56) / 0.44);
+    if (cooling <= 0.56) {
+      bodyMaterial.color.lerpColors(hotBodyColor, warmBodyColor, firstCool);
+    } else {
+      bodyMaterial.color.lerpColors(warmBodyColor, solidBodyColor, finalCool);
+    }
 
-    ribMaterial.opacity = outerFill;
-    detailMaterial.opacity = outerFill;
-    highlightMaterial.opacity = outerFill;
-    shadowMaterial.opacity = range(p, 0.59, 0.72) * 0.48;
+    bodyMaterial.roughness = THREE.MathUtils.lerp(0.17, 0.37, cooling);
+    bodyMaterial.clearcoat = THREE.MathUtils.lerp(0.86, 0.27, cooling);
+    bodyMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.1, 0.27, cooling);
+    bodyMaterial.envMapIntensity = THREE.MathUtils.lerp(0.9, 0.69, cooling);
+    bodyMaterial.specularIntensity = THREE.MathUtils.lerp(0.62, 0.46, cooling);
+    bodyMaterial.bumpScale = THREE.MathUtils.lerp(0.0009, 0.0017, surfaceLock);
+
+    ribMaterial.opacity = outerFill * range(p, 0.565, 0.65);
+    ribMaterial.roughness = THREE.MathUtils.lerp(0.31, 0.44, cooling);
+    ribMaterial.clearcoat = THREE.MathUtils.lerp(0.36, 0.18, cooling);
+    ribMaterial.clearcoatRoughness = THREE.MathUtils.lerp(0.2, 0.34, cooling);
+    ribMaterial.bumpScale = THREE.MathUtils.lerp(0.0012, 0.0019, surfaceLock);
+
+    const detailReveal = outerFill * range(p, 0.61, 0.72);
+    detailMaterial.opacity = detailReveal;
+    highlightMaterial.opacity = outerFill * range(p, 0.585, 0.69);
+    shadowMaterial.opacity = range(p, 0.59, 0.72) * THREE.MathUtils.lerp(0.34, 0.5, surfaceLock);
 
     group.visible = p > 0.397;
-    group.position.y = THREE.MathUtils.damp(group.position.y, 0, 5.4, delta);
-    group.scale.x = THREE.MathUtils.damp(group.scale.x, 1, 5.1, delta);
-    group.scale.y = THREE.MathUtils.damp(group.scale.y, 1, 5.1, delta);
-    group.scale.z = THREE.MathUtils.damp(group.scale.z, 1, 5.1, delta);
-
-    // A tiny studio turn begins only after the fill front has completed and the
-    // surface has substantially cooled. During injection the moulded part is still.
-    const finalTurn = clock.getElapsedTime() * 0.0055 * settle;
-    group.rotation.y = THREE.MathUtils.damp(
-      group.rotation.y,
-      settle * (p * 0.12 + finalTurn),
-      4,
+    group.position.y = THREE.MathUtils.damp(
+      group.position.y,
+      ejection * 0.055,
+      5.5,
       delta,
     );
+
+    const shrinkXZ = THREE.MathUtils.lerp(1, 0.992, shrink);
+    const shrinkY = THREE.MathUtils.lerp(1, 0.996, shrink);
+    group.scale.x = THREE.MathUtils.damp(group.scale.x, shrinkXZ, 5.2, delta);
+    group.scale.y = THREE.MathUtils.damp(group.scale.y, shrinkY, 5.2, delta);
+    group.scale.z = THREE.MathUtils.damp(group.scale.z, shrinkXZ, 5.2, delta);
+
+    const finalTurn = clock.getElapsedTime() * 0.006 * hero;
+    const targetRotation = hero * (0.055 + finalTurn) + ejection * 0.012;
+    group.rotation.y = THREE.MathUtils.damp(group.rotation.y, targetRotation, 3.8, delta);
     group.rotation.z = THREE.MathUtils.damp(group.rotation.z, 0, 4, delta);
 
     if (flowFrontRef.current) {
@@ -357,13 +370,15 @@ export default function RealisticCap({ progressRef }) {
     }
 
     if (gatePoolRef.current) {
-      gatePoolRef.current.visible = injectionActivity > 0.003;
-      const gatePulse = 1 + Math.sin(clock.getElapsedTime() * 0.7) * 0.035 * injectionActivity;
+      const gateVisible = injectionActivity * (1 - range(p, 0.59, 0.66));
+      gatePoolRef.current.visible = gateVisible > 0.003;
+      const gatePulse = 1 + Math.sin(clock.getElapsedTime() * 0.7) * 0.03 * gateVisible;
       gatePoolRef.current.scale.set(gatePulse, 1, gatePulse);
     }
 
     if (shadowRef.current) {
-      shadowRef.current.scale.setScalar(0.94 + cooling * 0.06);
+      const shadowScale = 1.03 - surfaceLock * 0.055 - hero * 0.025;
+      shadowRef.current.scale.setScalar(shadowScale);
     }
   });
 
@@ -395,7 +410,6 @@ export default function RealisticCap({ progressRef }) {
         <torusGeometry args={[2.28, 0.045, 8, 112]} />
       </mesh>
 
-      {/* A very subtle wet flow front marks the leading edge of cavity filling. */}
       <mesh
         ref={flowFrontRef}
         position={[0, 0.414, 0]}
@@ -407,7 +421,6 @@ export default function RealisticCap({ progressRef }) {
         <torusGeometry args={[1, 0.012, 6, 128]} />
       </mesh>
 
-      {/* Centre gate pool: small enough to read as a material source, not a glow effect. */}
       <mesh
         ref={gatePoolRef}
         position={[0, 0.405, 0]}
