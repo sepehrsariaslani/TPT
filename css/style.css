@@ -120,7 +120,7 @@ b,strong{font-weight:700}
   background:radial-gradient(ellipse at 50% 35%,rgba(61,139,255,.16),transparent 62%),#060a14}
 .pcar__gl{position:absolute;inset:0;cursor:grab;outline:none}
 .pcar__gl canvas{display:block;width:100%!important;height:100%!important}
-.pcar__stage.is-drag .pcar__gl,.pcar__gl:active{cursor:grabbing}
+.pcar__gl.is-drag,.pcar__gl:active{cursor:grabbing}
 .pcar__gl.is-off::after{content:'نمایش سه‌بعدی در این مرورگر پشتیبانی نمی‌شود';
   position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:14px;padding:20px;text-align:center}
 .pcar__hint{position:absolute;top:14px;inset-inline-start:16px;font-size:12px;color:var(--muted);
