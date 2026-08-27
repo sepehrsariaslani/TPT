@@ -56,6 +56,7 @@ function FrameBlocks({ material }) {
 export default function CoolingRelease({ progressRef }) {
   const topHalfRef = useRef();
   const bottomHalfRef = useRef();
+  const cavityCutawayRef = useRef();
   const nozzleRef = useRef();
   const sprueMeltRef = useRef();
   const pinsRef = useRef();
@@ -88,6 +89,33 @@ export default function CoolingRelease({ progressRef }) {
     () => makeSteelMaterial('#414f5a', 0.22, 0.68, 0.76),
     [],
   );
+  const cutawayMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#72899a',
+    metalness: 0.42,
+    roughness: 0.29,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.38,
+    specularIntensity: 0.34,
+    envMapIntensity: 0.62,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: true,
+    side: THREE.DoubleSide,
+  }), []);
+  const channelMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: '#3f637d',
+    metalness: 0.48,
+    roughness: 0.27,
+    clearcoat: 0.06,
+    clearcoatRoughness: 0.42,
+    specularIntensity: 0.3,
+    envMapIntensity: 0.58,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: true,
+  }), []);
   const meltMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#185ca5',
     metalness: 0,
@@ -111,6 +139,8 @@ export default function CoolingRelease({ progressRef }) {
     pillarMaterial.dispose();
     pinMaterial.dispose();
     nozzleMaterial.dispose();
+    cutawayMaterial.dispose();
+    channelMaterial.dispose();
     meltMaterial.dispose();
   }, [
     plateMaterial,
@@ -119,6 +149,8 @@ export default function CoolingRelease({ progressRef }) {
     pillarMaterial,
     pinMaterial,
     nozzleMaterial,
+    cutawayMaterial,
+    channelMaterial,
     meltMaterial,
   ]);
 
@@ -126,6 +158,7 @@ export default function CoolingRelease({ progressRef }) {
     const p = progressRef.current;
     const topHalf = topHalfRef.current;
     const bottomHalf = bottomHalfRef.current;
+    const cavityCutaway = cavityCutawayRef.current;
     const nozzle = nozzleRef.current;
     const sprueMelt = sprueMeltRef.current;
     const pins = pinsRef.current;
@@ -147,7 +180,9 @@ export default function CoolingRelease({ progressRef }) {
     const nozzleApproach = range(p, 0.365, 0.435);
     const nozzleRetract = range(p, 0.625, 0.715);
     const nozzleVisibility = nozzleApproach * (1 - range(p, 0.72, 0.79));
-    const sprueFlow = range(p, 0.4, 0.455) * (1 - range(p, 0.59, 0.66));
+    const sprueFlow = range(p, 0.395, 0.455) * (1 - range(p, 0.605, 0.665));
+    const fillInspect = range(p, 0.44, 0.505) * (1 - range(p, 0.635, 0.7));
+    const coolInspect = range(p, 0.585, 0.63) * (1 - range(p, 0.745, 0.81));
 
     plateMaterial.opacity = mouldVisibility * THREE.MathUtils.lerp(0.42, 0.82, clamp);
     insertMaterial.opacity = mouldVisibility * THREE.MathUtils.lerp(0.58, 0.94, clamp);
@@ -156,6 +191,10 @@ export default function CoolingRelease({ progressRef }) {
     pinMaterial.opacity = ejection * 0.9;
     nozzleMaterial.opacity = nozzleVisibility * 0.92;
     meltMaterial.opacity = sprueFlow * THREE.MathUtils.lerp(0.58, 0.86, injection);
+    cutawayMaterial.opacity = mouldVisibility
+      * (fillInspect * 0.2 + coolInspect * 0.075)
+      * (1 - release * 0.9);
+    channelMaterial.opacity = mouldVisibility * cooling * (1 - release) * 0.32;
 
     if (topHalf) {
       topHalf.visible = mouldVisibility > 0.002;
@@ -183,6 +222,16 @@ export default function CoolingRelease({ progressRef }) {
       );
     }
 
+    if (cavityCutaway) {
+      cavityCutaway.visible = cutawayMaterial.opacity > 0.003;
+      cavityCutaway.scale.y = THREE.MathUtils.damp(
+        cavityCutaway.scale.y,
+        THREE.MathUtils.lerp(1.04, 1, clamp),
+        5.6,
+        delta,
+      );
+    }
+
     if (nozzle) {
       nozzle.visible = nozzleVisibility > 0.003;
       const seatedY = THREE.MathUtils.lerp(2.28, 1.5, nozzleApproach);
@@ -193,10 +242,23 @@ export default function CoolingRelease({ progressRef }) {
 
     if (sprueMelt) {
       sprueMelt.visible = sprueFlow > 0.003;
+
+      // The sprue grows from the nozzle down toward the gate, rather than scaling
+      // from its centre. Keeping the upstream end fixed makes the injection path
+      // read as one directional flow into the cavity.
+      const sprueLength = 0.78;
+      const sprueTopY = 1.21;
+      const targetScaleY = THREE.MathUtils.lerp(0.08, 1, sprueFlow);
       sprueMelt.scale.y = THREE.MathUtils.damp(
         sprueMelt.scale.y,
-        THREE.MathUtils.lerp(0.16, 1, sprueFlow),
-        7.2,
+        targetScaleY,
+        7.4,
+        delta,
+      );
+      sprueMelt.position.y = THREE.MathUtils.damp(
+        sprueMelt.position.y,
+        sprueTopY - (sprueLength * targetScaleY) / 2,
+        7.4,
         delta,
       );
       sprueMelt.scale.x = THREE.MathUtils.damp(sprueMelt.scale.x, 0.9 + hold * 0.12, 6, delta);
@@ -309,9 +371,34 @@ export default function CoolingRelease({ progressRef }) {
           </mesh>
         ))}
 
-        {/* A restrained cooling-channel cue on the core side. */}
-        <mesh position={[0, 0.345, 0]} rotation={[Math.PI / 2, 0, 0]} material={plateMaterial}>
-          <torusGeometry args={[1.72, 0.025, 6, 96]} />
+        {/* Concentric cutaway cues stand in for buried cooling circuits. They are
+            visible only while cooling is active and remain non-emissive. */}
+        {[1.12, 1.72, 2.18].map((radius) => (
+          <mesh
+            key={radius}
+            position={[0, 0.345, 0]}
+            rotation={[Math.PI / 2, 0, 0]}
+            material={channelMaterial}
+          >
+            <torusGeometry args={[radius, 0.018, 6, 112]} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* Temporary inspection cutaway. It outlines the cavity envelope while the
+          polymer is filling, then disappears as cooling takes over. */}
+      <group ref={cavityCutawayRef} visible={false}>
+        <mesh material={cutawayMaterial}>
+          <cylinderGeometry args={[2.62, 2.62, 0.88, 144, 1, true]} />
+        </mesh>
+        <mesh position={[0, 0.44, 0]} rotation={[-Math.PI / 2, 0, 0]} material={cutawayMaterial}>
+          <ringGeometry args={[2.47, 2.62, 144]} />
+        </mesh>
+        <mesh position={[0, -0.44, 0]} rotation={[-Math.PI / 2, 0, 0]} material={cutawayMaterial}>
+          <ringGeometry args={[2.47, 2.62, 144]} />
+        </mesh>
+        <mesh position={[0, 0.425, 0]} rotation={[Math.PI / 2, 0, 0]} material={cutawayMaterial}>
+          <torusGeometry args={[2.54, 0.018, 6, 144]} />
         </mesh>
       </group>
 
@@ -330,8 +417,11 @@ export default function CoolingRelease({ progressRef }) {
         </mesh>
       </group>
 
-      <mesh ref={sprueMeltRef} position={[0, 0.82, 0]} material={meltMaterial} visible={false}>
+      <mesh ref={sprueMeltRef} position={[0, 1.18, 0]} material={meltMaterial} visible={false}>
         <cylinderGeometry args={[0.052, 0.076, 0.78, 28]} />
+      </mesh>
+      <mesh position={[0, 0.426, 0]} material={meltMaterial}>
+        <cylinderGeometry args={[0.078, 0.09, 0.018, 32]} />
       </mesh>
 
       <group ref={pinsRef} position={[0, -0.67, 0]} visible={false}>
